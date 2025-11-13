@@ -2,6 +2,8 @@
 
 A SignalK plugin that converts AIS vessel data to NMEA 0183 sentences and broadcasts them via TCP to clients like Navionics Boating App. Optionally forwards AIS data to VesselFinder.com and integrates cloud vessel data from AISFleet.com.
 
+It is intended for vessels that do not have their own AIS receiver on board.
+
 ## Features
 
 - **TCP Server**: Broadcasts NMEA 0183 AIS messages (Type 1 and Type 5) to connected clients
@@ -19,6 +21,8 @@ A SignalK plugin that converts AIS vessel data to NMEA 0183 sentences and broadc
 - **Flexible Filtering**: Skip vessels without callsign or valid identification
 - **Debug Options**: Detailed logging for specific MMSI or all vessels
 
+Warning: AIS data provided by this plugin can assist navigation. However, it never replaces the skipper's responsibility. I exclude any liability for damages resulting from the use of this plugin.
+
 ## Installation
 
 1. Install via SignalK App Store or manually:
@@ -29,7 +33,7 @@ npm install signalk-ais-navionics-converter
 
 2. Restart SignalK server
 
-3. Configure the plugin in SignalK admin interface → Plugin Config → AIS to NMEA 0183 Converter
+3. Configure the plugin in SignalK admin interface → Plugin Config → AIS to NMEA 0183 converter for TPC clients (e.g. Navionics)
 
 ## Configuration Parameters
 
@@ -119,6 +123,7 @@ npm install signalk-ais-navionics-converter
 
 1. **Data Collection**:
    - Fetches vessel data from SignalK API (`http://<IP_OF_SIGNALK_SERVER>:<PORT_SIGNALK_SERVER>/signalk/v1/api/vessels`)
+     - use other SignalK plugins (like AisHub WS) to receive more vessels for SignalK with AIS information
    - Optionally fetches nearby vessels from AISFleet.com API
    - Merges both sources, preferring newer timestamps
 

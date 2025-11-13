@@ -66,7 +66,7 @@ class AISEncoder {
         'constrained by draft': 4, 'moored': 5, 'aground': 6, 'fishing': 7,
         'sailing': 8, 'hazardous material high speed': 9, 'hazardous material wing in ground': 10,
         'power-driven vessel towing astern': 11, 'power-driven vessel pushing ahead': 12,
-        'reserved': 13, 'ais-sart': 14
+        'reserved': 13, 'ais-sart': 14, 'undefined': 15
       };
       if (state && stateMap[state] !== undefined) navStatus = stateMap[state];
 
@@ -100,7 +100,7 @@ class AISEncoder {
       const cogDegrees = cogValue * 180 / Math.PI;
       let cog10;
       if (sogKnots < config.minAlarmSOG) {
-        cog10 = 3600;
+        cog10 = 0; // or 3600 to indicate not available
       } else {
         cog10 = Math.round(cogDegrees * 10);
       }

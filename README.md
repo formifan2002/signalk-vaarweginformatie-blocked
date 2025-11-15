@@ -39,7 +39,7 @@ IMPORTANT: The following are required for the plugin to function:
     - [Debug Stale](#Debug-stale)
     - [Debug JSON](#debug-json)
     - [Debug AIS](#debug-ais-data)
-    - [Debug corrected SOG](#debug-mcorrected-sog)
+    - [Debug corrected SOG](#debug-corrected-sog)
 - [How It Works](#how-it-works)
   - [Data Flow](#data-flow)
   - [Merge Logic](#merge-logic)

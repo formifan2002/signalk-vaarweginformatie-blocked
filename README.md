@@ -1,6 +1,6 @@
 # SignalK AIS to NMEA 0183 Converter
 
-A SignalK plugin that converts AIS vessel data to NMEA 0183 sentences and broadcasts them via TCP to clients like Navionics Boating App. Optionally forwards AIS data to VesselFinder.com and integrates cloud vessel data from AISFleet.com.
+A SignalK plugin that converts AIS vessel data to NMEA 0183 sentences and broadcasts them via TCP to clients like 'Navionics Boating App' or 'OpenCpn'. Optionally forwards AIS data to VesselFinder.com and integrates cloud vessel data from AISFleet.com.
 
 It is intended for vessels that do not have their own AIS receiver on board.
 
@@ -45,6 +45,7 @@ IMPORTANT: The following are required for the plugin to function:
   - [Merge Logic](#merge-logic)
   - [Client Connection Handling](#client-connection-handling)
 - [Usage with Navionics Boating App](#usage-with-navionics-boating-app)
+- [Usage with OpenCpn](#usage-with-openCpn)
 - [Troubleshooting](#troubleshooting)
   - [No vessels appear in navigation app](#no-vessels-appear-in-navigation-app)
   - [Vessels disappear after a while](#vessels-disappear-after-a-while)
@@ -79,14 +80,8 @@ Warning: AIS data provided by this plugin can assist navigation. However, it nev
 
 ## Installation
 
-1. Install via SignalK App Store or manually:
-```bash
-cd ~/.signalk
-npm install signalk-ais-navionics-converter
-```
-
+1. Install via SignalK App Store 
 2. Restart SignalK server
-
 3. Configure the plugin in SignalK admin interface → Server → Plugin Config → AIS to NMEA 0183 converter for TPC clients (e.g. Navionics)
 
 ## Configuration Parameters
@@ -95,7 +90,7 @@ npm install signalk-ais-navionics-converter
 
 #### TCP Port
 - **Default**: 10113
-- **Description**: Port for the NMEA 0183 TCP server. Configure your navigation app (e.g., Navionics) to connect to this port.
+- **Description**: Port for the NMEA 0183 TCP server. Configure your navigation app (e.g., Navionics, OpenCpn) to connect to this port.
 
 #### Update Interval for Changed Vessels
 - **Default**: 15 (seconds)
@@ -242,6 +237,19 @@ When a new TCP client connects:
      - turn 'Display AIS targets' on
 3. Vessels should appear on chart immediately and in 'Connected devices' you should see as status for the connection: 'connected' (in green) and 'AIS data reception'
 
+## Usage with OpenCpn
+
+1. Configure plugin with desired settings
+2. In OpenCpn:
+   - Go to Menu → Tools → Options → Connections
+     - Add new connection as follows:
+         ![OpenCPN Screenshot1](img/OpenCpn1.png)
+         ![OpenCPN Screenshot2](img/OpenCpn2.png)
+     - Save connection
+   - Go to Menu → AIS 
+     - enable AIS targets
+3. Vessels should appear on chart immediately 
+
 ## Troubleshooting
 
 ### No vessels appear in navigation app
@@ -285,7 +293,7 @@ Debug information includes:
 - Own vessel position (for AISFleet cloud integration)
 - Own vessel MMSI
 - Internet connection (for AISFleet cloud features)
-- Navigation app with NMEA 0183 TCP support (e.g., Navionics)
+- Navigation app with NMEA 0183 TCP support (e.g. Navionics boating app or OpenCpn)
 
 ## License
 

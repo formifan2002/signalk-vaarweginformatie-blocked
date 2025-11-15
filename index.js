@@ -6,8 +6,8 @@ const AISEncoder = require('./ais-encoder');
 module.exports = function(app) {
   let plugin = {
     id: 'signalk-ais-navionics-converter',
-    name: 'AIS to NMEA 0183 converter for TPC clients (e.g. Navionics)',
-    description: 'SignalK plugin to convert AIS data to NMEA 0183 sentences to TCP clients (e.g. Navionics boating app) and optional to vesselfinder.com'
+    name: 'AIS to NMEA 0183 converter for TPC clients (e.g. Navionics, OpenCpn)',
+    description: 'SignalK plugin to convert AIS data to NMEA 0183 sentences to TCP clients (e.g. Navionics boating app, OpenCpn) and optional to vesselfinder.com'
   };
 
   let tcpServer = null;

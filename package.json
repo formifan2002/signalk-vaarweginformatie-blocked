@@ -1,7 +1,7 @@
 {
   "name": "signalk-ais-navionics-converter",
   "version": "1.0.0",
-  "description": "SignalK plugin to convert AIS data to NMEA 0183 sentences to TCP clients (e.g. Navionics boating app) and optional to vesselfinder.com",
+  "description": "SignalK plugin to convert AIS data to NMEA 0183 sentences to TCP clients (e.g. Navionics boating app, OpenCpn) and optional to vesselfinder.com",
   "main": "index.js",
   "keywords": [
     "signalk-node-server-plugin",

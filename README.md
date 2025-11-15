@@ -36,6 +36,10 @@ IMPORTANT: The following are required for the plugin to function:
   - [Debug Options](#debug-options)
     - [Debug All Vessel Details](#debug-all-vessel-details)
     - [Debug MMSI](#debug-mmsi)
+    - [Debug Stale](#Debug-stale)
+    - [Debug JSON](#debug-json)
+    - [Debug AIS](#debug-ais-data)
+    - [Debug corrected SOG](#debug-mcorrected-sog)
 - [How It Works](#how-it-works)
   - [Data Flow](#data-flow)
   - [Merge Logic](#merge-logic)
@@ -161,11 +165,27 @@ npm install signalk-ais-navionics-converter
 
 #### Debug All Vessel Details
 - **Default**: false
-- **Description**: Enables detailed debug logging for all vessels in the server log. Only visible when plugin is in debug mode. Useful for troubleshooting but generates lots of log data.
+- **Description**: Enables detailed debug logging for all vessels in the server log. Only visible when plugin is in debug mode. Useful for troubleshooting or understanding of send data.
 
 #### Debug MMSI
 - **Default**: empty
 - **Description**: MMSI number for detailed debug output of a specific vessel. Only visible when plugin is in debug mode. Leave empty to disable.
+
+#### Debug Stale
+- **Default**: false
+- **Description**: Stale vessels will be shown in debug log - only visible if plugin is in debug mode and debug all vessel details is enabled
+
+#### Debug JSON
+- **Default**: false
+- **Description**: JSON data of vessels will be shown in debug log - only visible if plugin is in debug mode and debug all vessel details is enabled
+
+#### Debug AIS data
+- **Default**: false
+- **Description**: Detailed debug AIS data output in server log for all vessels - only visible if plugin is in debug mode and debug all vessel details is enabled
+
+#### Debug corrected SOG
+- **Default**: false
+- **Description**: Detailed debug output in server log for all vessels with corrected SOG - only visible if plugin is in debug mode and debug all vessel details is enabled
 
 ## How It Works
 

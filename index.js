@@ -92,6 +92,30 @@ module.exports = function(app) {
         description: 'MMSI for detailed debug output in server log - only visible if plugin is in debug mode',
         default: ''
       },
+      logDebugStale: {
+        type: 'boolean',
+        title: 'Debug all vessel stale vessels',
+        description: 'Detailed debug output in server log for all stale vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
+        default: false
+      },
+      logDebugJSON: {
+        type: 'boolean',
+        title: 'Debug all JSON data for vessels',
+        description: 'Detailed debug JSON output in server log for all vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
+        default: false
+      },
+      logDebugAIS: {
+        type: 'boolean',
+        title: 'Debug all AIS data for vessels',
+        description: 'Detailed debug AIS data output in server log for all vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
+        default: false
+      },
+	  logDebugSOG: {
+        type: 'boolean',
+        title: 'Debug all vessels with corrected SOG',
+        description: 'Detailed debug output in server log for all vessels with corrected SOG - only visible if plugin is in debug mode and debug all vessel details is enabled',
+        default: false
+      },
       vesselFinderEnabled: {
         type: 'boolean',
         title: 'Enable VesselFinder forwarding',
@@ -256,6 +280,23 @@ module.exports = function(app) {
     updateInterval = setInterval(() => {
       processVessels(options, 'Scheduled');
     }, options.updateInterval * 1000);
+    
+    // Memory-Monitoring alle 5 Minuten wenn Debug aktiv
+    if (options.logDebugDetails) {
+      setInterval(() => {
+        logMemoryUsage();
+      }, 5 * 60 * 1000);
+    }
+  }
+  
+  function logMemoryUsage() {
+    const usage = process.memoryUsage();
+    app.debug('=== Memory Usage ===');
+    app.debug(`RSS: ${(usage.rss / 1024 / 1024).toFixed(2)} MB`);
+    app.debug(`Heap Used: ${(usage.heapUsed / 1024 / 1024).toFixed(2)} MB`);
+    app.debug(`Heap Total: ${(usage.heapTotal / 1024 / 1024).toFixed(2)} MB`);
+    app.debug(`External: ${(usage.external / 1024 / 1024).toFixed(2)} MB`);
+    app.debug(`Map sizes - previousVesselsState: ${previousVesselsState.size}, lastTCPBroadcast: ${lastTCPBroadcast.size}`);
   }
 
   function fetchFromURL(url) {
@@ -329,11 +370,20 @@ module.exports = function(app) {
         maxBodyLength: Infinity,
         url: url,
         headers: {},
-        timeout: 30000
+        timeout: 15000 // Reduziert auf 15 Sekunden
       };
+      
+      const startTime = Date.now();
       
       return axios.request(requestConfig)
         .then(response => {
+          const duration = Date.now() - startTime;
+          app.debug(`AISFleet API response time: ${duration}ms`);
+          
+          if (duration > 10000) {
+            app.error(`AISFleet API slow response: ${duration}ms - consider reducing radius`);
+          }
+          
           const data = response.data;
           
           if (data.vessels && Array.isArray(data.vessels)) {
@@ -475,7 +525,9 @@ module.exports = function(app) {
           }
         })
         .catch(error => {
-          if (error.response?.status >= 500) {
+          if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+            app.error(`AISFleet API timeout after 15s - consider reducing radius or check internet connection`);
+          } else if (error.response?.status >= 500) {
             app.error(`AISFleet API fetch failed: server error ${error.response.status}`);
           } else if (error.response?.status === 403) {
             app.error('AISFleet API fetch failed: access denied');
@@ -598,16 +650,18 @@ module.exports = function(app) {
           merged[vesselId] = mergeVesselData(merged[vesselId], cloudVessel);
           
           if (shouldLog) {
-            app.debug(`Merged vessel ${vesselId} (${mmsi}):`);
-            app.debug(JSON.stringify(merged[vesselId], null, 2));
+            // app.debug(`Merged vessel ${vesselId} (${mmsi}):`);
+			if ((options.logDebugJSON && options.logDebugDetails) || (logMMSI && logMMSI !== '' && mmsi === logMMSI)){			
+				app.debug(JSON.stringify(merged[vesselId], null, 2));
+			}
           }
         } else {
           // Vessel nur in Cloud - direkt hinzufügen
           merged[vesselId] = cloudVessel;
           
           if (shouldLog) {
-            app.debug(`Cloud-only vessel ${vesselId} (${mmsi}):`);
-			if (logMMSI && logMMSI !== '' && mmsi === logMMSI){
+            // app.debug(`Cloud-only vessel ${vesselId} (${mmsi}):`);
+			if ((options.logDebugJSON && options.logDebugDetails) || (logMMSI && logMMSI !== '' && mmsi === logMMSI)){			
 				app.debug(JSON.stringify(cloudVessel, null, 2));
 			}
           }
@@ -717,7 +771,7 @@ module.exports = function(app) {
           if (hours > 0) ageStr += `${hours}h `;
           if (minutes > 0) ageStr += `${minutes}m`;
           
-          if (options.logDebugDetails || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
+          if ((options.logDebugDetails && options.logDebugStale) || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
             app.debug(`Skipped (stale): ${vessel.mmsi} ${vessel.name} - ${ageStr.trim()} ago`);
           }
           continue;
@@ -747,8 +801,8 @@ module.exports = function(app) {
               vessel.navigation.speedOverGround = 0;
             }
             
-            if (options.logDebugDetails || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
-              const ageMinutes = Math.floor(ageMs / 60000);
+            if ((options.logDebugDetails && options.logDebugSOG) || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
+              const ageMinutes = Math.floor(ageMs / 60000)
               app.debug(`SOG corrected to 0 for ${vessel.mmsi} ${vessel.name} - position age: ${ageMinutes}min (was: ${originalSOG.toFixed(2)} m/s)`);
             }
           }
@@ -775,6 +829,12 @@ module.exports = function(app) {
       try {
         const filtered = filterVessels(vessels, options);
         
+        // Erstelle Set der aktuellen MMSIs
+        const currentMMSIs = new Set(filtered.map(v => v.mmsi));
+        
+        // Bereinige Maps von Schiffen die nicht mehr existieren
+        cleanupMaps(currentMMSIs, options);
+        
         messageIdCounter = (messageIdCounter + 1) % 10;
         const hasNewClients = newClients.length > 0;
         const nowTimestamp = Date.now();
@@ -799,7 +859,7 @@ module.exports = function(app) {
           const previousState = previousVesselsState.get(vessel.mmsi);
           const hasChanged = !previousState || previousState !== currentState || hasNewClients;
           
-          // TCP Resend Check: Alle 90 Sekunden neu senden, auch wenn unverändert
+          // TCP Resend Check
           const lastBroadcast = lastTCPBroadcast.get(vessel.mmsi) || 0;
           const timeSinceLastBroadcast = nowTimestamp - lastBroadcast;
           const needsTCPResend = timeSinceLastBroadcast >= (options.tcpResendInterval*1000);
@@ -827,7 +887,7 @@ module.exports = function(app) {
           const sendToTCP = hasChanged || needsTCPResend;
           
           // Debug-Logging für spezifische MMSI
-          const shouldLogDebug = options.logDebugDetails || (options.logMMSI && vessel.mmsi === options.logMMSI);
+          const shouldLogDebug = (options.logDebugDetails && options.logDebugAIS) || (options.logMMSI && vessel.mmsi === options.logMMSI);
           
           // Type 1
           const payload1 = AISEncoder.createPositionReport(vessel, options);
@@ -844,10 +904,24 @@ module.exports = function(app) {
               lastTCPBroadcast.set(vessel.mmsi, nowTimestamp);
             }
             
-            // VesselFinder: nur Type 1 Nachrichten
+            // VesselFinder: nur Type 1 Nachrichten und nur wenn Position nicht älter als 5 Minuten
             if (vesselFinderUpdateDue) {
-              sendToVesselFinder(sentence1, options);
-              vesselFinderCount++;
+              let posTimestamp = vessel.navigation?.position?.timestamp;
+              if (!posTimestamp && vessel.navigation?.position?.value) {
+                posTimestamp = vessel.navigation.position.value.timestamp;
+              }
+              
+              if (posTimestamp) {
+                const posAge = nowTimestamp - new Date(posTimestamp).getTime();
+                const fiveMinutes = 5 * 60 * 1000;
+                
+                if (posAge <= fiveMinutes) {
+                  sendToVesselFinder(sentence1, options);
+                  vesselFinderCount++;
+                } else if (shouldLogDebug) {
+                  app.debug(`[${vessel.mmsi}] Skipped VesselFinder (position age: ${Math.floor(posAge/60000)}min)`);
+                }
+              }
             }
           }
           
@@ -901,6 +975,30 @@ module.exports = function(app) {
     }).catch(err => {
       app.error(`Error in processVessels: ${err}`);
     });
+  }
+  
+  function cleanupMaps(currentMMSIs, options) {
+    // Entferne Einträge aus previousVesselsState
+    let removedFromState = 0;
+    for (const mmsi of previousVesselsState.keys()) {
+      if (!currentMMSIs.has(mmsi)) {
+        previousVesselsState.delete(mmsi);
+        removedFromState++;
+      }
+    }
+    
+    // Entferne Einträge aus lastTCPBroadcast
+    let removedFromBroadcast = 0;
+    for (const mmsi of lastTCPBroadcast.keys()) {
+      if (!currentMMSIs.has(mmsi)) {
+        lastTCPBroadcast.delete(mmsi);
+        removedFromBroadcast++;
+      }
+    }
+    
+    if (options.logDebugDetails && (removedFromState > 0 || removedFromBroadcast > 0)) {
+      app.debug(`Map cleanup: removed ${removedFromState} from previousVesselsState, ${removedFromBroadcast} from lastTCPBroadcast`);
+    }
   }
 
   return plugin;

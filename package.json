@@ -12,7 +12,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/signalk-ais-nmea-converter.git"
+    "url": "https://github.com/formifan2002/signalk-ais-navionics-converter"
   },
   "dependencies": {
     "axios": "^1.13.2"

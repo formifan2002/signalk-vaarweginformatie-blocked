@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title id="pageTitle"></title>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 2em;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 2.5em;
+    }
+    
+    h1 { 
+      margin: 0 0 0.5em 0;
+      color: #333;
+      font-size: 2em;
+      font-weight: 600;
+    }
+    
+    .description {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 1em;
+      margin-bottom: 2em;
+      border-radius: 4px;
+      color: #555;
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      gap: 1em;
+    }
+    
+    .description img {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+    }
+    
+    .description-text {
+      flex: 1;
+    }
+    
+    .control-panel {
+      display: flex;
+      gap: 2em;
+      align-items: center;
+      padding: 1.5em;
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 1.5em;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .switches {
+      display: flex;
+      gap: 2em;
+      flex: 1;
+    }
+    
+    .switch-container {
+      display: flex;
+      align-items: center;
+      gap: 0.8em;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 26px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 26px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #667eea;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+    
+    .help-button {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      padding: 0.6em 1.2em;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95em;
+      font-weight: 500;
+      transition: background 0.3s;
+      white-space: nowrap;
+    }
+    
+    .help-button:hover {
+      background: #5568d3;
+    }
+    
+    .help-button svg {
+      width: 20px;
+      height: 20px;
+    }
+    
+    .description a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .description a:hover {
+      text-decoration: underline;
+    }
+    
+    .field-help a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    
+    .field-help a:hover {
+      text-decoration: underline;
+    }
+    
+    /* Moderne Dialoge */
+    .custom-dialog {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .custom-dialog.show {
+      display: flex;
+    }
+    
+    .dialog-content {
+      background: white;
+      padding: 2em;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 500px;
+      width: 90%;
+    }
+    
+    .dialog-title {
+      font-size: 1.3em;
+      font-weight: 600;
+      margin-bottom: 1em;
+      color: #333;
+    }
+    
+    .dialog-message {
+      color: #555;
+      margin-bottom: 2em;
+      line-height: 1.6;
+    }
+    
+    .dialog-buttons {
+      display: flex;
+      gap: 1em;
+      justify-content: flex-end;
+    }
+    
+    .dialog-button {
+      padding: 0.6em 1.5em;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    
+    .dialog-button.primary {
+      background: #667eea;
+      color: white;
+    }
+    
+    .dialog-button.primary:hover {
+      background: #5568d3;
+    }
+    
+    .dialog-button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .dialog-button.secondary:hover {
+      background: #d0d0d0;
+    }
+    
+    fieldset { 
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.5em;
+      margin-bottom: 1.5em;
+      background: #fafafa;
+    }
+    
+    #areas label {
+      display: inline-block;
+      width: 32%;
+      margin: 0.3em 0;
+    }
+    
+    @media (max-width: 768px) {
+      #areas label {
+        width: 48%;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      #areas label {
+        width: 100%;
+      }
+    }
+    
+    legend { 
+      font-weight: 600;
+      color: #667eea;
+      padding: 0 0.5em;
+      font-size: 1.1em;
+    }
+    
+    label { 
+      display: block;
+      margin: 0.8em 0;
+      cursor: pointer;
+    }
+    
+    .resource-info {
+      margin-top: 1.5em;
+      padding-top: 1em;
+      border-top: 1px solid #e0e0e0;
+      font-size: 0.9em;
+    }
+    
+    .resource-info h4 {
+      margin: 0 0 0.5em 0;
+      color: #667eea;
+      font-size: 1em;
+      font-weight: 600;
+    }
+    
+    .resource-info p {
+      margin: 0.3em 0;
+      color: #555;
+      line-height: 1.5;
+    }
+    
+    .resource-info code {
+      background: #e9ecef;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-size: 0.85em;
+      color: #333;
+      word-break: break-all;
+    }
+    
+    .resource-info a {
+      color: #667eea;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+    
+    .resource-info a:hover {
+      color: #5568d3;
+      text-decoration: underline;
+    }
+    
+    .field-group {
+      margin-bottom: 1.2em;
+    }
+    
+    .field-label {
+      display: block;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 0.4em;
+    }
+    
+    .field-help {
+      display: block;
+      font-size: 0.85em;
+      color: #666;
+      margin-top: 0.3em;
+      font-style: italic;
+    }
+    
+    .input-with-button {
+      display: flex;
+      gap: 0.5em;
+    }
+    
+    .input-with-button input {
+      flex: 1;
+    }
+    
+    .file-button {
+      padding: 0.5em 1em;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9em;
+      white-space: nowrap;
+      transition: background 0.3s;
+    }
+    
+    .file-button:hover {
+      background: #5568d3;
+    }
+    
+    input[type="number"],
+    input[type="text"],
+    input[type="color"],
+    select {
+      padding: 0.6em;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1em;
+      transition: border-color 0.3s;
+    }
+    
+    input[type="number"]:focus,
+    input[type="text"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    input[type="number"] { width: 140px; }
+    input[type="text"] { width: 100%; max-width: 500px; }
+    select { width: 200px; }
+    input[type="color"] { 
+      width: 80px;
+      height: 40px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+    }
+    
+    input[type="checkbox"] {
+      margin-right: 0.5em;
+      cursor: pointer;
+      width: 18px;
+      height: 18px;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 1em;
+      margin-top: 2em;
+      padding-top: 2em;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    button {
+      padding: 0.8em 2em;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.3s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    button[type="submit"] {
+      background: #667eea;
+      color: white;
+    }
+    
+    button[type="submit"]:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+    }
+    
+    #restartBtn {
+      background: #28a745;
+      color: white;
+    }
+    
+    #restartBtn:hover {
+      background: #218838;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+    }
+    
+    #cancelBtn,
+    #backBtn {
+      background: #6c757d;
+      color: white;
+    }
+    
+    #cancelBtn:hover,
+    #backBtn:hover {
+      background: #5a6268;
+    }
+    
+    .loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    
+    #status {
+      margin-bottom: 1.5em;
+      padding: 1em;
+      border-radius: 8px;
+      display: none;
+      font-weight: 500;
+    }
+    
+    #status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+    
+    #status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 id="mainTitle"></h1>
+    <div class="description">
+      <img src="icon.png" alt="Plugin Icon">
+      <div class="description-text" id="pluginDescription"></div>
+    </div>
+
+    <div class="control-panel">
+      <div class="switches">
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="enabledSwitch" name="enabled">
+            <span class="slider"></span>
+          </label>
+          <span id="enabledLabel"></span>
+        </div>
+        
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="loggingSwitch" name="enableLogging">
+            <span class="slider"></span>
+          </label>
+          <span id="loggingLabel"></span>
+        </div>
+        
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="debugSwitch" name="enableDebug">
+            <span class="slider"></span>
+          </label>
+          <span id="debugLabel"></span>
+        </div>
+      </div>
+      
+      <button type="button" class="help-button" id="helpBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <span id="helpBtnText"></span>
+      </button>
+    </div>
+
+    <div id="status"></div>
+
+    <!-- Moderner Bestätigungs-Dialog -->
+    <div class="custom-dialog" id="confirmDialog">
+      <div class="dialog-content">
+        <div class="dialog-title" id="dialogTitle"></div>
+        <div class="dialog-message" id="dialogMessage"></div>
+        <div class="dialog-buttons">
+          <button class="dialog-button secondary" id="dialogCancel"></button>
+          <button class="dialog-button primary" id="dialogConfirm"></button>
+        </div>
+      </div>
+    </div>
+
+    <form id="configForm">
+      <fieldset>
+        <legend id="generalLegend"></legend>
+        <div class="field-group">
+          <span class="field-label" id="languageLabel"></span>
+          <select name="language" id="languageSelect">
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+          </select>
+          <span class="field-help" id="languageHelp"></span>
+        </div>
+        
+        <div class="resource-info">
+          <h4 id="resourceTitle"></h4>
+          <p id="resourceObjects"></p>
+          <p id="resourceWaterways"></p>
+        </div>
+      </fieldset>
+
+      <fieldset id="areas">
+        <legend id="areasLegend"></legend>
+        <!-- Inhalte werden dynamisch per JS erzeugt -->
+      </fieldset>
+
+      <fieldset>
+        <legend id="paramsLegend"></legend>
+        
+        <div class="field-group">
+          <span class="field-label" id="pollLabel"></span>
+          <input type="number" name="pollIntervalHours" min="1">
+          <span class="field-help" id="pollHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="daysLabel"></span>
+          <input type="number" name="daysSpan" min="1" max="60">
+          <span class="field-help" id="daysHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="routesLabel"></span>
+          <div class="input-with-button">
+            <input type="text" name="openCpnGeoJsonPathRoutes" id="routesPath">
+            <button type="button" class="file-button" id="routesFileBtn">📁</button>
+          </div>
+          <span class="field-help" id="routesHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="waypointsLabel"></span>
+          <div class="input-with-button">
+            <input type="text" name="openCpnGeoJsonPathWaypoints" id="waypointsPath">
+            <button type="button" class="file-button" id="waypointsFileBtn">📁</button>
+          </div>
+          <span class="field-help" id="waypointsHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="moveLabel"></span>
+          <input type="number" name="movePointMeters" min="0">
+          <span class="field-help" id="moveHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="sizeLabel"></span>
+          <input type="number" name="pointSize" min="1">
+          <span class="field-help" id="sizeHelp"></span>
+        </div>
+        
+        <div class="field-group">
+          <span class="field-label" id="colorLabel"></span>
+          <input type="color" name="colorHex">
+          <span class="field-help" id="colorHelp"></span>
+        </div>
+      </fieldset>
+
+      <div class="button-group">
+        <button type="submit" id="saveBtn"></button>
+        <button type="button" id="restartBtn"></button>
+        <button type="button" id="cancelBtn"></button>
+        <button type="button" id="backBtn"></button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // Basis-URLs
+    const pluginId = 'signalk-vaarweginformatie-blocked';
+    const baseUrl = `/plugins/${pluginId}`;
+    const configUrl = `${baseUrl}/config`;
+    const restartUrl = `${baseUrl}/restart`;
+
+    // Zustände
+    let initialConfig = null;
+    let currentLang = 'de';
+
+    // Übersetzungen
+    const translations = {
+      de: {
+        title: "Konfiguration 'signalk-vaarweginformatie-blocked'",
+        description: 'Das Plugin stellt die Informationen von <a href="https://www.vaarweginformatie.nl" target="_blank">vaarweginformatie.nl</a> über aktuell und zukünftig gesperrte Schleusen, Brücken und Wasserwege in den Niederlanden als Schnittstellen für z.B. freeboard-sk (als SignalK Resourcesets) und z.B. OpenCPN als GeoJSON GPX Dateien zur Verfügung.',
+        generalLegend: "Allgemein",
+        languageLabel: "Sprache:",
+        languageHelp: "Auswahl der Sprache für Dialog und Felder in der Schnittstelle",
+        areasLegend: "Gebiete",
+        paramsLegend: "Parameter",
+        pollInterval: "Poll-Intervall (Stunden):",
+        pollHelp: 'Abfrageintervall der Informationen von <a href="https://www.vaarweginformatie.nl" target="_blank">vaarweginformatie.nl</a> in Stunden (Standard: 24)',
+        daysSpan: "Zeitraum (Tage):",
+        daysHelp: "Anzahl Tage von heute an gerechnet (maximal 60)",
+        routesPath: "Dateiname gesperrte Wasserwege:",
+        routesHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Wasserwegen für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
+        waypointsPath: "Dateiname gesperrte Schleusen und Brücken:",
+        waypointsHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Schleusen und Brücken für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
+        moveMeters: "Punktverschiebung (m):",
+        moveHelp: "Punktverschiebung nach rechts in Metern (zur Vermeidung von Überlagerungen)",
+        pointSize: "Punktgröße:",
+        sizeHelp: "Größe der Punkte auf der Karte von freeboard-sk",
+        color: "Farbe:",
+        colorHelp: "Farbe der Punkte",
+        save: "Speichern",
+        restart: "Neustart Plugin",
+        cancel: "Abbruch",
+        back: "Zurück",
+        chooseFile: "Datei wählen",
+        saveSuccess: "Konfiguration gespeichert",
+        restartSuccess: "Plugin wird neu gestartet...",
+        saveError: "Fehler beim Speichern: ",
+        restartError: "Fehler beim Neustart: ",
+        loadError: "Fehler beim Laden der Konfiguration: ",
+        unsavedWarning: "Es gibt ungespeicherte Änderungen. Wirklich zurückgehen?",
+        unsavedTitle: "Ungespeicherte Änderungen",
+        yes: "Ja",
+        no: "Nein",
+        resourceTitle: "SignalK Resourcesets:",
+        resourceObjects: "Gesperrte Schleusen, Brücken:",
+        resourceWaterways: "Gesperrte Wasserstraßen:",
+        enabledLabel: "Plugin aktiviert",
+        loggingLabel: "Datenprotokollierung aktiviert",
+        debugLabel: "Debug-Protokoll aktiviert",
+        helpBtnText: "Hilfe"
+      },
+      en: {
+        title: "Configuration 'signalk-vaarweginformatie-blocked'",
+        description: 'The plugin provides information from <a href="https://www.vaarweginformatie.nl" target="_blank">vaarweginformatie.nl</a> about currently and future blocked locks, bridges and waterways in the Netherlands as interfaces for e.g. freeboard-sk (as SignalK resource sets) and e.g. OpenCPN as GeoJSON GPX files.',
+        generalLegend: "General",
+        languageLabel: "Language:",
+        languageHelp: "Selection of language for dialogs and fields in the interface",
+        areasLegend: "Areas",
+        paramsLegend: "Parameters",
+        pollInterval: "Poll interval (hours):",
+        pollHelp: 'Poll interval for information from <a href="https://www.vaarweginformatie.nl" target="_blank">vaarweginformatie.nl</a> in hours (default: 24)',
+        daysSpan: "Time span (days):",
+        daysHelp: "Number of days from today (maximum 60)",
+        routesPath: "Filename blocked waterways:",
+        routesHelp: "Path + filename of GPX file with blocked waterways for OpenCPN (as permanent layer). No file generation if field is empty",
+        waypointsPath: "Filename blocked locks and bridges:",
+        waypointsHelp: "Path + filename of GPX file with blocked locks and bridges for OpenCPN (as permanent layer). No file generation if field is empty",
+        moveMeters: "Move point (m):",
+        moveHelp: "Point offset to the right in meters (to avoid overlaps)",
+        pointSize: "Point size:",
+        sizeHelp: "Size of points on the freeboard-sk map",
+        color: "Color:",
+        colorHelp: "Color of the points",
+        save: "Save",
+        restart: "Restart plugin",
+        cancel: "Cancel",
+        back: "Back",
+        chooseFile: "Choose file",
+        saveSuccess: "Configuration saved",
+        restartSuccess: "Plugin restarting...",
+        saveError: "Error saving: ",
+        restartError: "Error restarting: ",
+        loadError: "Error loading configuration: ",
+        unsavedWarning: "There are unsaved changes. Really go back?",
+        unsavedTitle: "Unsaved changes",
+        yes: "Yes",
+        no: "No",
+        resourceTitle: "SignalK Resource sets:",
+        resourceObjects: "Blocked locks, bridges:",
+        resourceWaterways: "Blocked waterways:",
+        enabledLabel: "Plugin enabled",
+        loggingLabel: "Data logging enabled",
+        debugLabel: "Debug log enabled",
+        helpBtnText: "Help"
+      }
+    };
+
+    // Gebietslabels
+    const areaLabels = {
+      "All areas": { de: "Alle Gebiete", en: "All areas" },
+      "Algemeen Nederland": { de: "Allgemein Niederlande", en: "General Netherlands" },
+      "Noordzee": { de: "Nordsee", en: "North Sea" },
+      "Eems": { de: "Ems", en: "Ems" },
+      "Waddenzee": { de: "Wattenmeer", en: "Wadden Sea" },
+      "Groningen": { de: "Groningen", en: "Groningen" },
+      "Fryslan": { de: "Friesland", en: "Friesland" },
+      "Drenthe": { de: "Drenthe", en: "Drenthe" },
+      "Overijssel": { de: "Overijssel", en: "Overijssel" },
+      "Gelderland": { de: "Gelderland", en: "Gelderland" },
+      "Ijsselmeer": { de: "IJsselmeer", en: "IJsselmeer" },
+      "Flevoland": { de: "Flevoland", en: "Flevoland" },
+      "Utrecht": { de: "Utrecht", en: "Utrecht" },
+      "Noord-Holland": { de: "Nordholland", en: "North Holland" },
+      "Zuid-Holland": { de: "Südholland", en: "South Holland" },
+      "Zeeland": { de: "Zeeland", en: "Zeeland" },
+      "Noord-Brabant": { de: "Nordbrabant", en: "North Brabant" },
+      "Limburg": { de: "Limburg", en: "Limburg" }
+    };
+
+    // Reihenfolge der Gebiete (alphabetisch sortiert, "Alle Gebiete" zuerst)
+    const areaOrder = [
+      "All areas",
+      "Algemeen Nederland",
+      "Drenthe",
+      "Eems",
+      "Flevoland",
+      "Fryslan",
+      "Gelderland",
+      "Groningen",
+      "Ijsselmeer",
+      "Limburg",
+      "Noord-Brabant",
+      "Noord-Holland",
+      "Noordzee",
+      "Overijssel",
+      "Utrecht",
+      "Waddenzee",
+      "Zeeland",
+      "Zuid-Holland"
+    ];
+
+    // Status-Nachricht anzeigen
+    function showStatus(message, isError = false) {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = isError ? 'error' : 'success';
+      setTimeout(() => {
+        status.style.display = 'none';
+      }, 5000);
+    }
+
+    // Loading-Zustand setzen
+    function setLoading(isLoading) {
+      const form = document.getElementById('configForm');
+      if (isLoading) {
+        form.classList.add('loading');
+      } else {
+        form.classList.remove('loading');
+      }
+    }
+
+    // UI-Texte setzen
+    function updateUI(lang) {
+      const t = translations[lang];
+      document.title = t.title;
+      mainTitle.textContent = t.title;
+      document.querySelector('.description-text').innerHTML = t.description;
+      generalLegend.textContent = t.generalLegend;
+      languageLabel.textContent = t.languageLabel;
+      languageHelp.textContent = t.languageHelp;
+      areasLegend.textContent = t.areasLegend;
+      paramsLegend.textContent = t.paramsLegend;
+      pollLabel.textContent = t.pollInterval;
+      pollHelp.innerHTML = t.pollHelp;
+      daysLabel.textContent = t.daysSpan;
+      daysHelp.textContent = t.daysHelp;
+      routesLabel.textContent = t.routesPath;
+      routesHelp.textContent = t.routesHelp;
+      waypointsLabel.textContent = t.waypointsPath;
+      waypointsHelp.textContent = t.waypointsHelp;
+      moveLabel.textContent = t.moveMeters;
+      moveHelp.textContent = t.moveHelp;
+      sizeLabel.textContent = t.pointSize;
+      sizeHelp.textContent = t.sizeHelp;
+      colorLabel.textContent = t.color;
+      colorHelp.textContent = t.colorHelp;
+      saveBtn.textContent = t.save;
+      restartBtn.textContent = t.restart;
+      cancelBtn.textContent = t.cancel;
+      backBtn.textContent = t.back;
+      
+      // Switch-Labels
+      document.getElementById('enabledLabel').textContent = t.enabledLabel;
+      document.getElementById('loggingLabel').textContent = t.loggingLabel;
+      document.getElementById('debugLabel').textContent = t.debugLabel;
+      document.getElementById('helpBtnText').textContent = t.helpBtnText;
+      
+      // Resource-Info aktualisieren
+      updateResourceInfo(lang);
+    }
+    
+    // Resource-Info URLs aktualisieren
+    function updateResourceInfo(lang) {
+      const t = translations[lang];
+      const host = window.location.hostname;
+      const port = window.location.port || '3000';
+      const resourceType = lang === 'de' ? 'Sperrungen' : 'Closures';
+      
+      const objectsUrl = `http://${host}:${port}/signalk/v2/api/resources/${resourceType}`;
+      const waterwaysUrl = `http://${host}:${port}/signalk/v2/api/resources/routes`;
+      
+      document.getElementById('resourceTitle').textContent = t.resourceTitle;
+      document.getElementById('resourceObjects').innerHTML = 
+        `${t.resourceObjects} <a href="${objectsUrl}" target="_blank"><code>${objectsUrl}</code></a>`;
+      document.getElementById('resourceWaterways').innerHTML = 
+        `${t.resourceWaterways} <a href="${waterwaysUrl}" target="_blank"><code>${waterwaysUrl}</code></a>`;
+    }
+
+    // Konfiguration normalisieren
+    function normalizeConfig(raw) {
+      const cfg = { ...(raw || {}) };
+      cfg.language = Boolean(cfg.language);
+      
+      // enabled, enableLogging und enableDebug separat behandeln
+      if (typeof cfg.enabled !== 'undefined') {
+        cfg.enabled = Boolean(cfg.enabled);
+      }
+      if (typeof cfg.enableLogging !== 'undefined') {
+        cfg.enableLogging = Boolean(cfg.enableLogging);
+      }
+      if (typeof cfg.enableDebug !== 'undefined') {
+        cfg.enableDebug = Boolean(cfg.enableDebug);
+      }
+      
+      areaOrder.forEach(key => { if (typeof cfg[key] === 'undefined') cfg[key] = false; });
+      ['pollIntervalHours','daysSpan','movePointMeters','pointSize'].forEach(n => {
+        if (typeof cfg[n] !== 'undefined') cfg[n] = Number(cfg[n]);
+      });
+      return cfg;
+    }
+
+    // Gebiete rendern
+    function renderAreas(lang, config) {
+      const container = document.getElementById('areas');
+      Array.from(container.querySelectorAll('label')).forEach(l => l.remove());
+
+      areaOrder.forEach(key => {
+        const label = document.createElement('label');
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = key;
+        if (key === 'All areas') cb.id = 'allAreas';
+
+        const span = document.createElement('span');
+        span.className = 'areaLabel';
+        span.textContent = areaLabels[key][lang];
+
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' '));
+        label.appendChild(span);
+        container.appendChild(label);
+
+        if (config && typeof config[key] !== 'undefined') cb.checked = Boolean(config[key]);
+      });
+
+      const allAreasCB = document.getElementById('allAreas');
+      const others = Array.from(container.querySelectorAll('input[type="checkbox"]')).filter(cb => cb !== allAreasCB);
+
+      function applyAllAreasLogic() {
+        if (allAreasCB.checked) {
+          others.forEach(cb => { cb.checked = false; cb.disabled = true; });
+        } else {
+          others.forEach(cb => { cb.disabled = false; });
+        }
+      }
+      
+      function checkIfAllAreasNeeded() {
+        // Wenn kein Gebiet ausgewählt ist, aktiviere "Alle Gebiete"
+        const anyChecked = others.some(cb => cb.checked);
+        if (!anyChecked && !allAreasCB.checked) {
+          allAreasCB.checked = true;
+          applyAllAreasLogic();
+        }
+      }
+      
+      allAreasCB.addEventListener('change', applyAllAreasLogic);
+      others.forEach(cb => cb.addEventListener('change', () => {
+        if (cb.checked) { 
+          allAreasCB.checked = false; 
+          applyAllAreasLogic(); 
+        } else {
+          // Prüfe ob alle abgewählt sind
+          checkIfAllAreasNeeded();
+        }
+      }));
+      applyAllAreasLogic();
+      checkIfAllAreasNeeded();
+    }
+
+    // Moderner Bestätigungs-Dialog
+    function showConfirmDialog(message, title) {
+      return new Promise((resolve) => {
+        const dialog = document.getElementById('confirmDialog');
+        const dialogTitle = document.getElementById('dialogTitle');
+        const dialogMessage = document.getElementById('dialogMessage');
+        const dialogConfirm = document.getElementById('dialogConfirm');
+        const dialogCancel = document.getElementById('dialogCancel');
+        
+        const t = translations[currentLang];
+        dialogTitle.textContent = title || t.unsavedTitle;
+        dialogMessage.textContent = message;
+        dialogConfirm.textContent = t.yes;
+        dialogCancel.textContent = t.no;
+        
+        dialog.classList.add('show');
+        
+        const handleConfirm = () => {
+          dialog.classList.remove('show');
+          dialogConfirm.removeEventListener('click', handleConfirm);
+          dialogCancel.removeEventListener('click', handleCancel);
+          resolve(true);
+        };
+        
+        const handleCancel = () => {
+          dialog.classList.remove('show');
+          dialogConfirm.removeEventListener('click', handleConfirm);
+          dialogCancel.removeEventListener('click', handleCancel);
+          resolve(false);
+        };
+        
+        dialogConfirm.addEventListener('click', handleConfirm);
+        dialogCancel.addEventListener('click', handleCancel);
+      });
+    }
+
+    // Formularwerte sammeln
+    function collectConfig() {
+      const form = document.getElementById('configForm');
+      const formData = new FormData(form);
+      const configuration = {};
+
+      // Enabled, Logging und Debug Switches separat behandeln
+      configuration.enabled = document.getElementById('enabledSwitch').checked;
+      configuration.enableLogging = document.getElementById('loggingSwitch').checked;
+      configuration.enableDebug = document.getElementById('debugSwitch').checked;
+
+      for (const [key, value] of formData.entries()) {
+        if (key === 'enabled' || key === 'enableLogging' || key === 'enableDebug') continue;
+        
+        const el = form.querySelector(`[name="${CSS.escape(key)}"]`);
+        if (!el) continue;
+        if (el.type === 'checkbox') {
+          configuration[key] = el.checked;
+        } else if (el.type === 'number') {
+          configuration[key] = Number(value);
+        } else if (el.tagName === 'SELECT') {
+          configuration[key] = (value === 'de');
+        } else {
+          configuration[key] = value;
+        }
+      }
+      return configuration;
+    }
+
+    // DOM-Referenzen
+    const mainTitle = document.getElementById('mainTitle');
+    const generalLegend = document.getElementById('generalLegend');
+    const languageLabel = document.getElementById('languageLabel');
+    const languageHelp = document.getElementById('languageHelp');
+    const areasLegend = document.getElementById('areasLegend');
+    const paramsLegend = document.getElementById('paramsLegend');
+    const pollLabel = document.getElementById('pollLabel');
+    const pollHelp = document.getElementById('pollHelp');
+    const daysLabel = document.getElementById('daysLabel');
+    const daysHelp = document.getElementById('daysHelp');
+    const routesLabel = document.getElementById('routesLabel');
+    const routesHelp = document.getElementById('routesHelp');
+    const waypointsLabel = document.getElementById('waypointsLabel');
+    const waypointsHelp = document.getElementById('waypointsHelp');
+    const moveLabel = document.getElementById('moveLabel');
+    const moveHelp = document.getElementById('moveHelp');
+    const sizeLabel = document.getElementById('sizeLabel');
+    const sizeHelp = document.getElementById('sizeHelp');
+    const colorLabel = document.getElementById('colorLabel');
+    const colorHelp = document.getElementById('colorHelp');
+
+    const saveBtn = document.getElementById('saveBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const backBtn = document.getElementById('backBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const languageSelect = document.getElementById('languageSelect');
+    const enabledSwitch = document.getElementById('enabledSwitch');
+    const helpBtn = document.getElementById('helpBtn');
+
+    // Hilfe-Button
+    helpBtn.addEventListener('click', () => {
+      window.open('https://github.com/formifan2002/signalk-vaarweginformatie-blocked/blob/main/README.md', '_blank');
+    });
+
+    // Enabled-Switch überwacht Restart-Button
+    function updateRestartButton() {
+      if (enabledSwitch.checked) {
+        restartBtn.disabled = false;
+        restartBtn.style.opacity = '1';
+      } else {
+        restartBtn.disabled = true;
+        restartBtn.style.opacity = '0.5';
+      }
+    }
+
+    enabledSwitch.addEventListener('change', updateRestartButton);
+
+    // Datei-Auswahl Buttons (mit vollständigem Pfad)
+    document.getElementById('routesFileBtn').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.gpx';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (file) {
+          // Versuche den vollständigen Pfad zu bekommen (funktioniert nur in bestimmten Browsern)
+          // Fallback auf nur Dateiname wenn Pfad nicht verfügbar
+          const fullPath = file.path || file.webkitRelativePath || `/path/to/${file.name}`;
+          document.getElementById('routesPath').value = fullPath;
+        }
+      };
+      input.click();
+    });
+
+    document.getElementById('waypointsFileBtn').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.gpx';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (file) {
+          const fullPath = file.path || file.webkitRelativePath || `/path/to/${file.name}`;
+          document.getElementById('waypointsPath').value = fullPath;
+        }
+      };
+      input.click();
+    });
+
+    // Sprache wechseln
+    languageSelect.addEventListener('change', e => {
+      currentLang = e.target.value;
+      updateUI(currentLang);
+      const currentConfig = normalizeConfig(collectConfig());
+      renderAreas(currentLang, currentConfig);
+    });
+
+    // Konfiguration laden
+    fetch(configUrl)
+      .then(res => {
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        return res.json();
+      })
+      .then(data => {
+        const raw = data.configuration || {};
+        initialConfig = {
+          ...raw,
+          enabled: data.enabled,
+          enableLogging: data.enableLogging,
+          enableDebug: data.enableDebug
+        };
+
+        console.log("Geladene Roh-Konfiguration:", JSON.stringify(initialConfig, null, 2));
+
+        const fullForLog = normalizeConfig(initialConfig);
+        console.log("Geladene Konfiguration (vollständig):", JSON.stringify(fullForLog, null, 2));
+
+        // Sprache setzen
+        currentLang = initialConfig.language ? 'de' : 'en';
+        languageSelect.value = currentLang;
+
+        // UI und Gebiete
+        updateUI(currentLang);
+        renderAreas(currentLang, fullForLog);
+
+        // Switches setzen
+        if (typeof initialConfig.enabled !== 'undefined') {
+          document.getElementById('enabledSwitch').checked = Boolean(initialConfig.enabled);
+        } else {
+          document.getElementById('enabledSwitch').checked = true; // Default
+        }
+        
+        if (typeof initialConfig.enableLogging !== 'undefined') {
+          document.getElementById('loggingSwitch').checked = Boolean(initialConfig.enableLogging);
+        }
+        
+        if (typeof initialConfig.enableDebug !== 'undefined') {
+          document.getElementById('debugSwitch').checked = Boolean(initialConfig.enableDebug);
+        }
+        
+        updateRestartButton();
+
+        // Parameter setzen
+        ['pollIntervalHours','daysSpan','openCpnGeoJsonPathRoutes',
+         'openCpnGeoJsonPathWaypoints','movePointMeters','pointSize','colorHex']
+         .forEach(name => {
+           const el = document.querySelector(`[name="${name}"]`);
+           if (!el) return;
+           const val = initialConfig[name];
+           if (typeof val === 'undefined') return;
+           if (el.type === 'number') el.value = Number(val);
+           else el.value = val;
+         });
+      })
+      .catch(err => {
+        showStatus((translations[currentLang]?.loadError || 'Fehler beim Laden der Konfiguration: ') + err.message, true);
+        console.error(err);
+      });
+
+    // Speichern mit automatischem Restart
+    document.getElementById('configForm').addEventListener('submit', e => {
+      e.preventDefault();
+
+      const collected = collectConfig();
+      const normalized = normalizeConfig(collected);
+      
+      // Trenne configuration von enabled/enableLogging/enableDebug
+      const { enabled, enableLogging, enableDebug, ...configuration } = normalized;
+      
+      const payload = {
+        configuration: configuration,
+        enabled: Boolean(enabled),
+        enableLogging: Boolean(enableLogging),
+        enableDebug: Boolean(enableDebug)
+      };
+
+      console.log("Zu speichernde Daten:", JSON.stringify(payload, null, 2));
+
+      setLoading(true);
+
+      fetch(configUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        return res.json();
+      })
+      .then(() => {
+        showStatus(translations[currentLang].saveSuccess);
+        console.log("Speichern erfolgreich über /configure.");
+        
+        // initialConfig exakt so aktualisieren wie es geladen wurde
+        initialConfig = JSON.parse(JSON.stringify(normalized));
+        
+        // Automatischer Restart nur wenn Plugin aktiviert ist
+        if (!enabled) {
+          console.log("Plugin deaktiviert - kein Restart");
+          return Promise.resolve();
+        }
+        
+        return fetch(restartUrl, { method: 'POST' });
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        return res.json();
+      })
+      .then(() => {
+        showStatus(translations[currentLang].restartSuccess);
+        console.log("Plugin automatisch neu gestartet");
+      })
+      .catch(err => {
+        showStatus(translations[currentLang].saveError + err.message, true);
+        console.error(err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+    });
+
+    // Manueller Restart-Button
+    restartBtn.addEventListener('click', () => {
+      setLoading(true);
+      fetch(restartUrl, { method: 'POST' })
+        .then(res => {
+          if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+          return res.json();
+        })
+        .then(data => {
+          console.log("Restart erfolgreich:", data);
+          showStatus(translations[currentLang].restartSuccess);
+        })
+        .catch(err => {
+          console.error("Restart fehlgeschlagen:", err);
+          showStatus(translations[currentLang].restartError + err.message, true);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    });
+
+    // Abbruch
+    cancelBtn.addEventListener('click', () => window.history.back());
+
+    // Zurück mit Warnung
+    backBtn.addEventListener('click', async () => {
+      const current = normalizeConfig(collectConfig());
+      const initial = normalizeConfig(initialConfig);
+      
+      // Debug-Ausgabe
+      console.log("Current config:", JSON.stringify(current, null, 2));
+      console.log("Initial config:", JSON.stringify(initial, null, 2));
+      
+      const changed = JSON.stringify(current) !== JSON.stringify(initial);
+      const t = translations[currentLang];
+      if (changed) {
+        const confirmed = await showConfirmDialog(t.unsavedWarning, t.unsavedTitle);
+        if (confirmed) {
+          window.history.back();
+        }
+      } else {
+        window.history.back();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -3,6 +3,8 @@ node_modules/
 
 # Build outputs (Webpack)
 public/
+!public/index.html
+!public/icon.png
 dist/
 build/
 

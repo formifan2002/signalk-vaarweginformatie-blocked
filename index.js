@@ -1,1005 +1,656 @@
-const net = require('net');
-const dgram = require('dgram');
+// SignalK Plugin: signalk-vaarweginformatie-blocked
+// Fetches BLOCKED waterways from vaarweginformatie.nl and provides them as GeoJSON
+// via SignalK Resource Provider API for automatic Freeboard-SK integration
+
+const fs = require('fs');
 const axios = require('axios');
-const AISEncoder = require('./ais-encoder');
 
-module.exports = function(app) {
-  let plugin = {
-    id: 'signalk-ais-navionics-converter',
-    name: 'AIS to NMEA 0183 converter for TPC clients (e.g. Navionics, OpenCpn)',
-    description: 'SignalK plugin to convert AIS data to NMEA 0183 sentences to TCP clients (e.g. Navionics boating app, OpenCpn) and optional to vesselfinder.com'
-  };
+// Mapping von Namen auf fmtArea IDs
+const AREA_MAP = {
+  "Algemeen Nederland": 409359,
+  "Noordzee": 4577709,
+  "Eems": 539759,
+  "Waddenzee": 496785,
+  "Groningen": 409357,
+  "Fryslan": 409362,
+  "Drenthe": 409358,
+  "Overijssel": 409356,
+  "Gelderland": 409353,
+  "Ijsselmeer": 409354,
+  "Flevoland": 409355,
+  "Utrecht": 409366,
+  "Noord-Holland": 409361,
+  "Zuid-Holland": 409360,
+  "Zeeland": 409363,
+  "Noord-Brabant": 409364,
+  "Limburg": 409365
+};
 
-  let tcpServer = null;
-  let udpClient = null;
-  let updateInterval = null;
-  let tcpClients = [];
-  let newClients = [];
-  let previousVesselsState = new Map();
-  let lastTCPBroadcast = new Map();
-  let messageIdCounter = 0;
-  let ownMMSI = null;
-  let vesselFinderLastUpdate = 0;
-  let signalkApiUrl = null;
+function clampDays(days) {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.min(60, Math.max(1, Math.floor(n)));
+}
 
-  plugin.schema = {
-    type: 'object',
-    required: ['tcpPort'],
-    properties: {
-      tcpPort: {
-        type: 'number',
-        title: 'TCP Port',
-        description: 'Port for NMEA TCP server',
-        default: 10113
-      },
-      updateInterval: {
-        type: 'number',
-        title: 'Update interval for changed vessels (seconds, default: 15)',
-        description: 'How often to send updates to TCP clients (only changed vessels)',
-        default: 15
-      },
-      tcpResendInterval: {
-        type: 'number',
-        title: 'Update interval for unchanged vessels (seconds, default: 60)',
-        description: 'How often to resend unchanged vessels to TCP clients (0=disabled) - if 0 or too high vessels might disappear in Navionics boating app', 
-        default: 60
-      },
-      skipWithoutCallsign: {
-        type: 'boolean',
-        title: 'Skip vessels without callsign',
-        description: 'Vessels without callsign will not be send', 
-        default: false
-      },
-      skipStaleData: {
-        type: 'boolean',
-        title: 'Skip vessels with stale data',
-        description: 'Do not send vessels without unchanged data (yes/no, default: yes)', 
-        default: true
-      },
-      staleDataThresholdMinutes: {
-        type: 'number',
-        title: 'Stale data threshold (minutes)',
-        description: 'Data where the position timestamp is older then n minutes will not be send',
-        default: 60
-      },
-      staleDataShipnameAddTime: {
-        type: 'number',
-        title: 'Timestamp last update of position added to ship name (minutes, 0=disabled)',
-        description: 'The timestamp of the last position update will be added to the ship name, if the data is older then actual time - minutes',
-        default: 5
-      },
-      minAlarmSOG: {
-        type: 'number',
-        title: 'Minimum SOG for alarm (m/s)',
-        description: 'SOG below this value will be set to 0',
-        default: 0.2
-      },
-      maxMinutesSOGToZero: {
-        type: 'number',
-        title: 'Maximum minutes before SOG is set to 0 (0=no correction of SOG)',
-        description: 'SOG will be set to 0 if last position timestamp is older then current time - minutes',
-        default: 0
-      },      
-      logDebugDetails: {
-        type: 'boolean',
-        title: 'Debug all vessel details',
-        description: 'Detailed debug output in server log for all vessels - only visible if plugin is in debug mode',
-        default: false
-      },
-      logMMSI: {
-        type: 'string',
-        title: 'Debug MMSI',
-        description: 'MMSI for detailed debug output in server log - only visible if plugin is in debug mode',
-        default: ''
-      },
-      logDebugStale: {
-        type: 'boolean',
-        title: 'Debug all vessel stale vessels',
-        description: 'Detailed debug output in server log for all stale vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
-        default: false
-      },
-      logDebugJSON: {
-        type: 'boolean',
-        title: 'Debug all JSON data for vessels',
-        description: 'Detailed debug JSON output in server log for all vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
-        default: false
-      },
-      logDebugAIS: {
-        type: 'boolean',
-        title: 'Debug all AIS data for vessels',
-        description: 'Detailed debug AIS data output in server log for all vessels - only visible if plugin is in debug mode and debug all vessel details is enabled',
-        default: false
-      },
-	  logDebugSOG: {
-        type: 'boolean',
-        title: 'Debug all vessels with corrected SOG',
-        description: 'Detailed debug output in server log for all vessels with corrected SOG - only visible if plugin is in debug mode and debug all vessel details is enabled',
-        default: false
-      },
-      vesselFinderEnabled: {
-        type: 'boolean',
-        title: 'Enable VesselFinder forwarding',
-        description: 'AIS type 1 messages (position) will be send to vesselfinder.com via UDP',
-        default: false
-      },
-      vesselFinderHost: {
-        type: 'string',
-        title: 'VesselFinder Host (default: ais.vesselfinder.com)',
-        default: 'ais.vesselfinder.com'
-      },
-      vesselFinderPort: {
-        type: 'number',
-        title: 'VesselFinder UDP Port (default: 5500)',
-        default: 5500
-      },
-      vesselFinderUpdateRate: {
-        type: 'number',
-        title: 'VesselFinder Update Rate (seconds)',
-        default: 60
-      },
-      cloudVesselsEnabled: {
-        type: 'boolean',
-        title: 'Include vessels received from AISFleet.com',
-        description: 'Beside vessels available in SignalK vessels from aisfleet.com will taken into account',
-        default: true
-      },
-      cloudVesselsRadius: {
-        type: 'number',
-        title: 'Radius (from own vessel) to include vessels from AISFleet.com (nautical miles)',
-        default: 10
-      }
-    }
-  };
-
-  plugin.start = function(options) {
-    app.debug('AIS to NMEA Converter plugin will start in 5 seconds...');
-
-    setTimeout(() => {
-      app.debug('Starting AIS to NMEA Converter plugin');
-
-      // Ermittle SignalK API URL
-      const port = app.config.settings.port || 3000;
-      let hostname = app.config.settings.hostname || '0.0.0.0';
-      
-      // Wenn 0.0.0.0, verwende 127.0.0.1 für lokale Aufrufe
-      if (hostname === '0.0.0.0' || hostname === '::') {
-        hostname = '127.0.0.1';
-      }
-      
-      signalkApiUrl = `http://${hostname}:${port}/signalk/v1/api`;
-
-      // Hole eigene MMSI
-      getOwnMMSI().then(() => {
-        startTCPServer(options);
-        startUpdateLoop(options);
-
-        if (options.vesselFinderEnabled && options.vesselFinderHost) {
-          startVesselFinderForwarding(options);
-        }
-      });
-    }, 5000);
-  };
-
-  plugin.stop = function() {
-    app.debug('Stopping AIS to NMEA Converter plugin');
-    
-    if (updateInterval) clearInterval(updateInterval);
-    
-    if (tcpServer) {
-      tcpClients.forEach(client => client.destroy());
-      tcpClients = [];
-      tcpServer.close();
-      tcpServer = null;
-    }
-    
-    if (udpClient) {
-      udpClient.close();
-      udpClient = null;
-    }
-    
-    previousVesselsState.clear();
-    lastTCPBroadcast.clear();
-  };
-
-  function getOwnMMSI() {
-    return new Promise((resolve) => {
-      if (ownMMSI) {
-        resolve(ownMMSI);
-        return;
-      }
-      
-      const selfData = app.getSelfPath('mmsi');
-      if (selfData) {
-        ownMMSI = selfData.toString();
-        app.debug(`Own MMSI detected: ${ownMMSI}`);
-      }
-      resolve(ownMMSI);
-    });
-  }
-
-  function startTCPServer(options) {
-    tcpServer = net.createServer((socket) => {
-      app.debug(`TCP client connected: ${socket.remoteAddress}:${socket.remotePort}`);
-      tcpClients.push(socket);
-      newClients.push(socket);
-
-      socket.on('end', () => {
-        app.debug(`TCP client disconnected`);
-        tcpClients = tcpClients.filter(c => c !== socket);
-        newClients = newClients.filter(c => c !== socket);
-      });
-
-      socket.on('error', (err) => {
-        app.error(`TCP socket error: ${err}`);
-        tcpClients = tcpClients.filter(c => c !== socket);
-        newClients = newClients.filter(c => c !== socket);
-      });
-    });
-
-    tcpServer.listen(options.tcpPort, () => {
-      app.debug(`NMEA TCP Server listening on port ${options.tcpPort}`);
-      app.setPluginStatus(`TCP Server running on port ${options.tcpPort}`);
-    });
-  }
-
-  function startVesselFinderForwarding(options) {
-    udpClient = dgram.createSocket('udp4');
-    app.debug(`VesselFinder UDP forwarding enabled: ${options.vesselFinderHost}:${options.vesselFinderPort}`);
-  }
-
-  function broadcastTCP(message) {
-    tcpClients.forEach(client => {
-      try {
-        client.write(message + '\r\n');
-      } catch (err) {
-        app.error(`Error broadcasting to TCP client: ${err}`);
-      }
-    });
-  }
-
-  function sendToVesselFinder(message, options) {
-    if (!udpClient || !options.vesselFinderEnabled) return;
-    
-    try {
-      const buffer = Buffer.from(message + '\r\n');
-      udpClient.send(buffer, 0, buffer.length, options.vesselFinderPort, options.vesselFinderHost, (err) => {
-        if (err) {
-          app.error(`Error sending to VesselFinder: ${err}`);
-        }
-      });
-    } catch (error) {
-      app.error(`VesselFinder send error: ${error}`);
-    }
-  }
-
-  function startUpdateLoop(options) {
-    // Initiales Update
-    processVessels(options, 'Startup');
-    
-    // Regelmäßige Updates
-    updateInterval = setInterval(() => {
-      processVessels(options, 'Scheduled');
-    }, options.updateInterval * 1000);
-    
-    // Memory-Monitoring alle 5 Minuten wenn Debug aktiv
-    if (options.logDebugDetails) {
-      setInterval(() => {
-        logMemoryUsage();
-      }, 5 * 60 * 1000);
-    }
+function buildApiUrl(validFromMs, validUntilMs, selectedAreas) {
+  const base = 'https://www.vaarweginformatie.nl/frp/api/messages/nts/summaries';
+  const url = new URL(base);
+  url.searchParams.set('validFrom', String(validFromMs));
+  url.searchParams.set('validUntil', String(validUntilMs));
+  url.searchParams.set('ntsTypes', 'FTM');
+  url.searchParams.set('limitationGroup', 'BLOCKED');
+  
+  // Nur wenn nicht "All areas" ausgewählt wurde
+  if (selectedAreas.length > 0) {
+    selectedAreas.forEach((id) => url.searchParams.append('ftmAreas', String(id)));
   }
   
-  function logMemoryUsage() {
-    const usage = process.memoryUsage();
-    app.debug('=== Memory Usage ===');
-    app.debug(`RSS: ${(usage.rss / 1024 / 1024).toFixed(2)} MB`);
-    app.debug(`Heap Used: ${(usage.heapUsed / 1024 / 1024).toFixed(2)} MB`);
-    app.debug(`Heap Total: ${(usage.heapTotal / 1024 / 1024).toFixed(2)} MB`);
-    app.debug(`External: ${(usage.external / 1024 / 1024).toFixed(2)} MB`);
-    app.debug(`Map sizes - previousVesselsState: ${previousVesselsState.size}, lastTCPBroadcast: ${lastTCPBroadcast.size}`);
-  }
+  return url.toString();
+}
 
-  function fetchFromURL(url) {
-    return new Promise((resolve, reject) => {
-      app.debug(`Fetching SignalK vessels from URL: ${url}`);
-      
-      const http = require('http');
-      
-      http.get(url, (res) => {
-        let data = '';
-        
-        // Prüfe HTTP Status Code
-        if (res.statusCode !== 200) {
-          app.error(`HTTP ${res.statusCode} from ${url}`);
-          reject(new Error(`HTTP ${res.statusCode}`));
-          return;
-        }
-        
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        
-        res.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            resolve(result);
-          } catch (err) {
-            app.error(`Invalid JSON from ${url}: ${err.message}`);
-            app.error(`Data preview: ${data.substring(0, 200)}`);
-            reject(err);
-          }
-        });
-      }).on('error', (err) => {
-        app.error(`HTTP request error for ${url}: ${err.message}`);
-        reject(err);
-      });
-    });
-  }
+// Hilfsfunktion für führende Nullen
+function formatDateTime(dateString) {
+  if (!dateString) return 'unbekannt';
+  const d = new Date(dateString);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
 
-  function fetchVesselsFromAPI() {
-    return fetchFromURL(`${signalkApiUrl}/vessels`);
-  }
+// Formatiere Datum für OpenCPN (DD.MM.YYYY oder DD/MM/YYYY)
+function formatDateForOpenCPN(dateString, languageIsGerman) {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const separator = languageIsGerman ? '.' : '/';
+  return `${day}${separator}${month}${separator}${year}`;
+}
 
-  function fetchCloudVessels(options) {
-    if (!options.cloudVesselsEnabled) {
-      return Promise.resolve(null);
+// Formatiere Datum für OpenCPN ISO Format (2025-11-26T15:41:40Z)
+function formatDateISO(dateString) {
+  if (!dateString) return '';
+  return new Date(dateString).toISOString();
+}
+
+// Generiere GPX für Routes
+function generateRoutesGPX(routes, colorHex, languageIsGerman) {
+  let gpx = `<?xml version="1.0"?>
+<gpx version="1.1" creator="OpenCPN" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www8.garmin.com/xmlschemas/GpxExtensionsv3.xsd" xmlns:opencpn="http://www.opencpn.org">
+`;
+
+  routes.forEach(route => {
+    const startDateFormatted = formatDateForOpenCPN(route.startDate, languageIsGerman);
+    const endDateFormatted = route.endDate ? formatDateForOpenCPN(route.endDate, languageIsGerman) : '';
+    const startISO = formatDateISO(route.startDate);
+    
+    // Bestimme "bis" oder "to" Text
+    let endText = '';
+    if (route.endDate) {
+      endText = languageIsGerman ? `bis ${endDateFormatted}` : `to ${endDateFormatted}`;
     }
     
-    try {
-      // Hole eigene Position
-      const position = app.getSelfPath('navigation.position');
-      if (!position || !position.value || !position.value.latitude || !position.value.longitude) {
-        app.error('No self position available for cloud vessels fetch');
-        return Promise.resolve(null);
-      }
+    gpx += `  <rte>
+    <name>${escapeXml(route.name)}</name>
+    <extensions>
+      <opencpn:start>${startDateFormatted}</opencpn:start>
+      <opencpn:end>${endText}</opencpn:end>
+      <opencpn:planned_departure>${startISO}</opencpn:planned_departure>
+      <opencpn:time_display>GLOBAL SETTING</opencpn:time_display>
+      <opencpn:style style="100" />
+      <gpxx:RouteExtension>
+        <gpxx:IsAutoNamed>false</gpxx:IsAutoNamed>
+        <gpxx:DisplayColor>Red</gpxx:DisplayColor>
+      </gpxx:RouteExtension>
+    </extensions>
+`;
+
+    // Waypoints der Route
+    route.coordinates.forEach((coord, index) => {
+      const [lon, lat] = coord;
+      const isFirstOrLast = index === 0 || index === route.coordinates.length - 1;
+      const sym = isFirstOrLast ? '1st-Active-Waypoint' : 'Symbol-Diamond-Red';
       
-      const lat = position.value.latitude;
-      const lng = position.value.longitude;
-      const radius = options.cloudVesselsRadius || 10;
+      gpx += `    <rtept lat="${lat}" lon="${lon}">
+      <time>${startISO}</time>
+      <name>${index + 1}</name>
+      <sym>${sym}</sym>
+      <type>WPT</type>
+      <extensions>
+        <opencpn:waypoint_range_rings visible="false" number="0" step="1" units="0" colour="${colorHex}" />
+        <opencpn:scale_min_max UseScale="false" ScaleMin="2147483646" ScaleMax="0" />
+      </extensions>
+    </rtept>
+`;
+    });
+
+    gpx += `  </rte>
+`;
+  });
+
+  gpx += `</gpx>`;
+  return gpx;
+}
+
+// Generiere GPX für Waypoints (Sperrungen)
+function generateWaypointsGPX(points, languageIsGerman) {
+  const now = new Date().toISOString();
+  const title = languageIsGerman ? 'Sperrungen' : 'Closures';
+  const description = languageIsGerman 
+    ? 'Sperrungen von Objekten (Schleusen, Brücken,...)'
+    : 'Closures of objects (locks, bridges,...)';
+  
+  let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:opencpn="http://www.opencpn.org" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="vwi_waypoints_generator.py -- https://github.com/marcelrv/OpenCPN-Waypoints">
+  <metadata>
+    <name>${title}</name>
+    <desc>${description}</desc>
+    <time>${now}</time>
+  </metadata>
+`;
+
+  points.forEach(point => {
+    const [lon, lat] = point.geometry.coordinates;
+    const name = escapeXml(point.properties.name);
+    const desc = escapeXml(point.properties.description);
+    
+    gpx += `  <wpt lat="${lat}" lon="${lon}">
+    <name>${name}</name>
+    <desc>${desc}</desc>
+    <sym>Symbol-X-Large-Red</sym>
+    <extensions>
+      <opencpn:scale_min_max UseScale="True" ScaleMin="160000" ScaleMax="0"></opencpn:scale_min_max>
+    </extensions>
+  </wpt>
+`;
+  });
+
+  gpx += `</gpx>`;
+  return gpx;
+}
+
+// XML Escape Funktion
+function escapeXml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Berechne Distanz zwischen zwei Koordinaten in Metern (Haversine-Formel)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Erdradius in Metern
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Berechne Gesamtdistanz einer Route
+function calculateRouteDistance(coordinates) {
+  let totalDistance = 0;
+  for (let i = 0; i < coordinates.length - 1; i++) {
+    const [lon1, lat1] = coordinates[i];
+    const [lon2, lat2] = coordinates[i + 1];
+    totalDistance += calculateDistance(lat1, lon1, lat2, lon2);
+  }
+  return Math.round(totalDistance);
+}
+
+// Formatiere Beschreibung für von/bis oder ab
+function formatBlockageDescription(blockages, languageIsGerman) {
+  return blockages.map(block => {
+    const startStr = formatDateTime(block.startDate);
+    const endStr = block.endDate ? formatDateTime(block.endDate) : null;
+
+    if (!endStr) {
+      return languageIsGerman ? `ab ${startStr}` : `from ${startStr}`;
+    }
+
+    const startDay = startStr.split(' ')[0];
+    const endDay = endStr.split(' ')[0];
+    const startTime = startStr.split(' ')[1];
+    const endTime = endStr.split(' ')[1];
+
+    if (startDay === endDay) {
+      return languageIsGerman 
+        ? `von ${startDay} ${startTime} bis ${endTime}`
+        : `from ${startDay} ${startTime} to ${endTime}`;
+    } else {
+      return languageIsGerman
+        ? `von ${startStr} bis ${endStr}`
+        : `from ${startStr} to ${endStr}`;
+    }
+  }).join(" | ");
+}
+
+// Verschiebe Punkt um X Meter nach Osten (rechts)
+function movePointEast(lat, lon, meters) {
+  // 1 Grad Longitude ≈ 111320 * cos(lat) Meter
+  const latRad = lat * Math.PI / 180;
+  const metersPerDegree = 111320 * Math.cos(latRad);
+  const deltaLon = meters / metersPerDegree;
+  return [lon + deltaLon, lat];
+}
+
+function toGeoJSON(messages, movePointMeters, languageIsGerman) {
+  const locationGroups = {};
+  const routes = [];
+  
+  for (const msg of messages || []) {
+    if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
+    
+    const validPoints = msg.location.filter(p => 
+      typeof p.lon === 'number' && typeof p.lat === 'number'
+    );
+    
+    if (validPoints.length === 0) continue;
+    
+    // Wenn mehr als 1 Punkt: Route
+    if (validPoints.length > 1) {
+      const coordinates = validPoints.map(p => [p.lon, p.lat]);
+      const distance = calculateRouteDistance(coordinates);
+      const description = formatBlockageDescription([{
+        startDate: msg.startDate,
+        endDate: msg.endDate
+      }], languageIsGerman);
       
-      if (!ownMMSI) {
-        app.error('No own MMSI available for cloud vessels fetch');
-        return Promise.resolve(null);
-      }
+      const routeName = languageIsGerman 
+        ? `Sperrung - ${msg.locationName || msg.title || 'Unbekannt'}`
+        : `Closure - ${msg.locationName || msg.title || 'Unknown'}`;
       
-      const url = `https://aisfleet.com/api/vessels/nearby?lat=${lat}&lng=${lng}&radius=${radius}&mmsi=${ownMMSI}`;
-      app.debug(`Fetching cloud vessels from AISFleet API (radius: ${radius}nm)`);
-      
-      const requestConfig = {
-        method: 'get',
-        maxBodyLength: Infinity,
-        url: url,
-        headers: {},
-        timeout: 15000 // Reduziert auf 15 Sekunden
+      routes.push({
+        name: routeName,
+        description: description,
+        distance: distance,
+        coordinates: coordinates,
+        fairway: msg.fairwayName,
+        startDate: msg.startDate,
+        endDate: msg.endDate
+      });
+      continue;
+    }
+    
+    // Einzelner Punkt: gruppieren
+    const firstPoint = validPoints[0];
+    const lat = firstPoint.lat.toFixed(5);
+    const lon = firstPoint.lon.toFixed(5);
+    const key = `${lat},${lon}`;
+    
+    if (!locationGroups[key]) {
+      locationGroups[key] = {
+        lat: parseFloat(lat),
+        lon: parseFloat(lon),
+        locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
+        fairway: msg.fairwayName,
+        blockages: []
       };
-      
-      const startTime = Date.now();
-      
-      return axios.request(requestConfig)
-        .then(response => {
-          const duration = Date.now() - startTime;
-          app.debug(`AISFleet API response time: ${duration}ms`);
-          
-          if (duration > 10000) {
-            app.error(`AISFleet API slow response: ${duration}ms - consider reducing radius`);
-          }
-          
-          const data = response.data;
-          
-          if (data.vessels && Array.isArray(data.vessels)) {
-            app.debug(`Retrieved ${data.vessels.length} vessels from AISFleet cloud API`);
-            
-            // Konvertiere zu SignalK-Format
-            const cloudVessels = {};
-            data.vessels.forEach(vessel => {
-              if (!vessel.mmsi || vessel.mmsi === ownMMSI) return;
-              
-              const vesselId = `urn:mrn:imo:mmsi:${vessel.mmsi}`;
-              const vesselData = {};
-              
-              // Basis-Informationen
-              if (vessel.mmsi) {
-                vesselData.mmsi = vessel.mmsi;
-              }
-              
-              if (vessel.name) {
-                vesselData.name = vessel.name;
-              }
-              
-              if (vessel.call_sign) {
-                vesselData.communication = {
-                  callsignVhf: vessel.call_sign
-                };
-              }
-              
-              if (vessel.imo_number) {
-                vesselData.imo = vessel.imo_number;
-              }
-              
-              // Design-Daten - Format kompatibel zu SignalK
-              const design = {};
-              if (vessel.design_length) {
-                design.length = {
-                  value: {
-                    overall: vessel.design_length
-                  }
-                };
-              }
-              if (vessel.design_beam) {
-                design.beam = {
-                  value: vessel.design_beam
-                };
-              }
-              if (vessel.design_draft) {
-                design.draft = {
-                  value: {
-                    maximum: vessel.design_draft
-                  }
-                };
-              }
-              if (vessel.ais_ship_type) {
-                design.aisShipType = {
-                  value: {
-                    id: vessel.ais_ship_type
-                  }
-                };
-              }
-              if (Object.keys(design).length > 0) {
-                vesselData.design = design;
-              }
-              
-              // Navigation
-              const navigation = {};
-              
-              if (vessel.last_position) {
-                navigation.position = {
-                  value: {
-                    latitude: vessel.last_position.latitude,
-                    longitude: vessel.last_position.longitude
-                  },
-                  timestamp: vessel.last_position.timestamp
-                };
-              }
-              
-              if (vessel.latest_navigation) {
-                const nav = vessel.latest_navigation;
-                const navTimestamp = nav.timestamp;
-                
-                if (nav.course_over_ground !== null && nav.course_over_ground !== undefined) {
-                  // COG 360° ist ungültig, setze auf 0°
-                  let cog = nav.course_over_ground;
-                  if (cog >= 360) {
-                    cog = 0;
-                  }
-                  navigation.courseOverGroundTrue = {
-                    value: cog,
-                    timestamp: navTimestamp
-                  };
-                }
-                
-                if (nav.speed_over_ground !== null && nav.speed_over_ground !== undefined) {
-                  navigation.speedOverGround = {
-                    value: nav.speed_over_ground * 0.514444, // knots to m/s
-                    timestamp: navTimestamp
-                  };
-                }
-                
-                if (nav.heading !== null && nav.heading !== undefined) {
-                  // Heading 360° ist ungültig, setze auf 0°
-                  let heading = nav.heading;
-                  if (heading >= 360) {
-                    heading = 0;
-                  }
-                  navigation.headingTrue = {
-                    value: heading * Math.PI / 180, // degrees to radians
-                    timestamp: navTimestamp
-                  };
-                }
-                
-                if (nav.rate_of_turn !== null && nav.rate_of_turn !== undefined) {
-                  navigation.rateOfTurn = {
-                    value: nav.rate_of_turn * Math.PI / 180, // degrees/s to radians/s
-                    timestamp: navTimestamp
-                  };
-                }
-                
-                if (nav.navigation_status !== null && nav.navigation_status !== undefined) {
-                  navigation.state = {
-                    value: nav.navigation_status,
-                    timestamp: navTimestamp
-                  };
-                }
-              }
-              
-              if (Object.keys(navigation).length > 0) {
-                vesselData.navigation = navigation;
-              }
-              
-              cloudVessels[vesselId] = vesselData;
-            });
-            
-            return cloudVessels;
-          } else {
-            app.debug('No vessels array in AISFleet API response');
-            return null;
-          }
-        })
-        .catch(error => {
-          if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-            app.error(`AISFleet API timeout after 15s - consider reducing radius or check internet connection`);
-          } else if (error.response?.status >= 500) {
-            app.error(`AISFleet API fetch failed: server error ${error.response.status}`);
-          } else if (error.response?.status === 403) {
-            app.error('AISFleet API fetch failed: access denied');
-          } else if (error.response?.status) {
-            app.error(`AISFleet API fetch failed: HTTP ${error.response.status}`);
-          } else if (error.code) {
-            app.error(`AISFleet API fetch failed: ${error.code} - ${error.message}`);
-          } else {
-            app.error(`AISFleet API fetch failed: ${error.message || 'Unknown error'}`);
-          }
-          return null;
-        });
-      
-    } catch (error) {
-      app.error(`Error in fetchCloudVessels: ${error.message}`);
-      return Promise.resolve(null);
     }
+    
+    locationGroups[key].blockages.push({
+      startDate: msg.startDate,
+      endDate: msg.endDate,
+      id: msg.ntsSummaryId || msg.id
+    });
   }
   
-  function mergeVesselData(vessel1, vessel2) {
-    // Merge zwei Vessel-Objekte, neuere Timestamps haben Vorrang
-    const merged = JSON.parse(JSON.stringify(vessel1)); // Deep copy
-    
-    if (!vessel2) return merged;
-    
-    // Spezialbehandlung für name und callsign: Gefüllte Werte haben immer Vorrang
-    const vessel1Name = vessel1.name;
-    const vessel2Name = vessel2.name;
-    const vessel1Callsign = vessel1.communication?.callsignVhf || vessel1.callsign || vessel1.callSign;
-    const vessel2Callsign = vessel2.communication?.callsignVhf || vessel2.callsign || vessel2.callSign;
-    
-    // Name: Bevorzuge gefüllte Werte über "Unknown" oder leere Werte
-    if (vessel2Name && vessel2Name !== 'Unknown' && vessel2Name !== '') {
-      if (!vessel1Name || vessel1Name === 'Unknown' || vessel1Name === '') {
-        merged.name = vessel2Name;
-      }
-    }
-    
-    // Callsign: Bevorzuge gefüllte Werte über leere Werte
-    if (vessel2Callsign && vessel2Callsign !== '') {
-      if (!vessel1Callsign || vessel1Callsign === '') {
-        if (!merged.communication) merged.communication = {};
-        merged.communication.callsignVhf = vessel2Callsign;
-        // Setze auch die anderen Varianten
-        merged.callsign = vessel2Callsign;
-        merged.callSign = vessel2Callsign;
-      }
-    }
-    
-    // Funktion zum Vergleichen und Mergen von Objekten mit Timestamps
-    const mergeWithTimestamp = (target, source, path = '') => {
-      if (!source) return;
-      
-      for (const key in source) {
-        const sourcePath = path ? `${path}.${key}` : key;
-        
-        // Überspringe name und callsign-Felder, die bereits behandelt wurden
-        if (key === 'name' || key === 'callsign' || key === 'callSign') {
-          continue;
-        }
-        
-        // Überspringe communication.callsignVhf, wurde bereits behandelt
-        if (path === 'communication' && key === 'callsignVhf') {
-          continue;
-        }
-        
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          // Prüfe ob Objekt einen Timestamp hat
-          if (source[key].timestamp && target[key]?.timestamp) {
-            const sourceTime = new Date(source[key].timestamp);
-            const targetTime = new Date(target[key].timestamp);
-            
-            if (sourceTime > targetTime) {
-              target[key] = source[key];
-            }
-          } else if (source[key].timestamp && !target[key]?.timestamp) {
-            // Source hat Timestamp, Target nicht - nehme Source
-            target[key] = source[key];
-          } else if (!source[key].timestamp && target[key]?.timestamp) {
-            // Target hat Timestamp, Source nicht - behalte Target
-            // Nichts tun
-          } else {
-            // Kein Timestamp in beiden - rekursiv mergen
-            if (!target[key]) target[key] = {};
-            mergeWithTimestamp(target[key], source[key], sourcePath);
-          }
-        } else if (!target[key] && source[key]) {
-          // Target hat keinen Wert, übernehme von Source
-          target[key] = source[key];
-        }
+  // Erstelle Features aus gruppierten Daten (Punkte)
+  const features = [];
+  for (const key in locationGroups) {
+    const group = locationGroups[key];
+    const descriptions = formatBlockageDescription(group.blockages, languageIsGerman);
+
+    // Punkt nach rechts verschieben um Überlagerung zu vermeiden
+    const [shiftedLon, shiftedLat] = movePointEast(group.lat, group.lon, movePointMeters);
+
+    const feature = {
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [shiftedLon, shiftedLat]
+      },
+      properties: {
+        name: group.locationName,
+        description: descriptions,
+        fairway: group.fairway || undefined,
+        status: 'BLOCKED',
+        blockageCount: group.blockages.length,
+        source: 'vaarweginformatie.nl'
       }
     };
     
-    mergeWithTimestamp(merged, vessel2);
-    return merged;
-  }
-
-  function mergeVesselSources(signalkVessels, cloudVessels, options) {
-    const merged = {};
-    
-    app.debug(`Merging vessels - SignalK: ${signalkVessels ? Object.keys(signalkVessels).length : 0}, Cloud: ${cloudVessels ? Object.keys(cloudVessels).length : 0}`);
-    
-    // Füge alle SignalK Vessels hinzu
-    if (signalkVessels) {
-      for (const [vesselId, vessel] of Object.entries(signalkVessels)) {
-        merged[vesselId] = vessel;
-      }
-    }
-    
-    // Merge Cloud Vessels
-    if (cloudVessels) {
-      for (const [vesselId, cloudVessel] of Object.entries(cloudVessels)) {
-        const mmsiMatch = vesselId.match(/mmsi:(\d+)/);
-        const mmsi = mmsiMatch ? mmsiMatch[1] : null;
-        const logMMSI = options.logMMSI || '';
-        const shouldLog = options.logDebugDetails || (logMMSI && logMMSI !== '' && mmsi === logMMSI);
-        
-        if (merged[vesselId]) {
-          // Vessel existiert in beiden Quellen - merge mit Timestamp-Vergleich
-          merged[vesselId] = mergeVesselData(merged[vesselId], cloudVessel);
-          
-          if (shouldLog) {
-            // app.debug(`Merged vessel ${vesselId} (${mmsi}):`);
-			if ((options.logDebugJSON && options.logDebugDetails) || (logMMSI && logMMSI !== '' && mmsi === logMMSI)){			
-				app.debug(JSON.stringify(merged[vesselId], null, 2));
-			}
-          }
-        } else {
-          // Vessel nur in Cloud - direkt hinzufügen
-          merged[vesselId] = cloudVessel;
-          
-          if (shouldLog) {
-            // app.debug(`Cloud-only vessel ${vesselId} (${mmsi}):`);
-			if ((options.logDebugJSON && options.logDebugDetails) || (logMMSI && logMMSI !== '' && mmsi === logMMSI)){			
-				app.debug(JSON.stringify(cloudVessel, null, 2));
-			}
-          }
-          if (merged[vesselId].name && merged[vesselId].navigation.position.timestamp && options.staleDataShipnameAddTime > 0) {
-            const timestamp = new Date(merged[vesselId].navigation.position.timestamp); // UTC-Zeit
-            const nowUTC = new Date(); // aktuelle Zeit (intern ebenfalls UTC-basiert)
-            const diffMs = nowUTC - timestamp; // Differenz in Millisekunden
-            const diffMinutes = Math.floor(diffMs / (1000 * 60)); // Umrechnung in Minuten
-            if (diffMinutes >= options.staleDataShipnameAddTime) {
-              // Füge Zeitstempel zum Schiffsnamen hinzu und kürze auf 20 Zeichen
-              let suffix = "";
-              if (diffMinutes > 1439) { // mehr als 23:59 Minuten → Tage
-                const days = Math.ceil(diffMinutes / (60 * 24));
-                suffix = ` DAY${days}`;
-              } else if (diffMinutes > 59) { // mehr als 59 Minuten → Stunden
-                const hours = Math.ceil(diffMinutes / 60);
-                suffix = ` HOUR${hours}`;
-              } else { // sonst → Minuten
-                suffix = ` MIN${diffMinutes}`;
-              }
-              // Füge Zeitstempel zum Schiffsnamen hinzu und kürze auf 20 Zeichen
-              merged[vesselId].name = `${merged[vesselId].name}${suffix}`.substring(0, 20);
-            }
-          }
-        }
-      }
-    }
-    
-    app.debug(`Total merged vessels: ${Object.keys(merged).length}`);
-    return merged;
-  }
-
-  function getVessels(options) {
-    return Promise.all([
-      fetchVesselsFromAPI(),
-      fetchCloudVessels(options)
-    ]).then(([signalkVessels, cloudVessels]) => {
-      const vessels = [];
-      
-      // Merge beide Datenquellen
-      const allVessels = mergeVesselSources(signalkVessels, cloudVessels, options);
-      
-      if (!allVessels) return vessels;
-      
-      for (const [vesselId, vessel] of Object.entries(allVessels)) {
-        if (vesselId === 'self') continue;
-        
-        const mmsiMatch = vesselId.match(/mmsi:(\d+)/);
-        if (!mmsiMatch) continue;
-        
-        const mmsi = mmsiMatch[1];
-        if (ownMMSI && mmsi === ownMMSI) continue;
-        
-        vessels.push({
-          mmsi: mmsi,
-          name: vessel.name || 'Unknown',
-          callsign: vessel.callsign || vessel.callSign || vessel.communication?.callsignVhf || '',
-          navigation: vessel.navigation || {},
-          design: vessel.design || {},
-          sensors: vessel.sensors || {},
-          destination: vessel.navigation?.destination?.commonName?.value || null,
-          imo: vessel.imo || vessel.registrations?.imo || '0'
-        });
-      }
-      
-      return vessels;
-    }).catch(err => {
-      app.error(`Error in getVessels: ${err}`);
-      return [];
-    });
-  }
-
-  function filterVessels(vessels, options) {
-    const now = new Date();
-    const filtered = [];
-    
-    for (const vessel of vessels) {
-      let callSign = vessel.callsign || '';
-      const hasRealCallsign = callSign && callSign.length > 0;
-      
-      if (!hasRealCallsign) {
-        callSign = 'UNKNOWN';
-      }
-      
-      // Hole Position Timestamp für mehrere Checks
-      let posTimestamp = vessel.navigation?.position?.timestamp;
-      
-      // Fallback für verschachtelte Strukturen (z.B. nach Merge)
-      if (!posTimestamp && vessel.navigation?.position?.value) {
-        posTimestamp = vessel.navigation.position.value.timestamp;
-      }
-      
-      // Stale data check
-      if (options.skipStaleData && posTimestamp) {
-        const lastUpdate = new Date(posTimestamp);
-        const ageMs = now - lastUpdate;
-        const thresholdMs = options.staleDataThresholdMinutes * 60 * 1000;
-        
-        if (ageMs > thresholdMs) {
-          const ageSec = Math.floor(ageMs / 1000);
-          const days = Math.floor(ageSec / 86400);
-          const hours = Math.floor((ageSec % 86400) / 3600);
-          const minutes = Math.floor((ageSec % 3600) / 60);
-          
-          let ageStr = '';
-          if (days > 0) ageStr += `${days}d `;
-          if (hours > 0) ageStr += `${hours}h `;
-          if (minutes > 0) ageStr += `${minutes}m`;
-          
-          if ((options.logDebugDetails && options.logDebugStale) || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
-            app.debug(`Skipped (stale): ${vessel.mmsi} ${vessel.name} - ${ageStr.trim()} ago`);
-          }
-          continue;
-        }
-      }
-      
-      // SOG Korrektur basierend auf Position Timestamp Alter
-      if (options.maxMinutesSOGToZero > 0 && posTimestamp) {
-        const lastUpdate = new Date(posTimestamp);
-        const ageMs = now - lastUpdate;
-        const sogThresholdMs = options.maxMinutesSOGToZero * 60 * 1000;
-        if (ageMs > sogThresholdMs) {
-          // Position ist zu alt, setze SOG auf 0
-          if (vessel.navigation && vessel.navigation.speedOverGround) {
-            let originalSOG = vessel.navigation.speedOverGround.value !== undefined 
-              ? vessel.navigation.speedOverGround.value 
-              : vessel.navigation.speedOverGround;
-            
-            // Stelle sicher, dass originalSOG eine Zahl ist
-            if (typeof originalSOG !== 'number') {
-              originalSOG = 0;
-            }
-            
-            if (vessel.navigation.speedOverGround.value !== undefined) {
-              vessel.navigation.speedOverGround.value = 0;
-            } else {
-              vessel.navigation.speedOverGround = 0;
-            }
-            
-            if ((options.logDebugDetails && options.logDebugSOG) || (options.logMMSI && vessel.mmsi === options.logMMSI)) {
-              const ageMinutes = Math.floor(ageMs / 60000)
-              app.debug(`SOG corrected to 0 for ${vessel.mmsi} ${vessel.name} - position age: ${ageMinutes}min (was: ${originalSOG.toFixed(2)} m/s)`);
-            }
-          }
-        }
-      }
-      
-      // Callsign check
-      if (options.skipWithoutCallsign && !hasRealCallsign) {
-        if (options.logDebugDetails || (!options.logMMSI || vessel.mmsi === options.logMMSI)) {
-          app.debug(`Skipped (no callsign): ${vessel.mmsi} ${vessel.name}`);
-        }
-        continue;
-      }
-      
-      vessel.callSign = callSign;
-      filtered.push(vessel);
-    }
-    
-    return filtered;
-  }
-
-  function processVessels(options, reason) {
-    getVessels(options).then(vessels => {
-      try {
-        const filtered = filterVessels(vessels, options);
-        
-        // Erstelle Set der aktuellen MMSIs
-        const currentMMSIs = new Set(filtered.map(v => v.mmsi));
-        
-        // Bereinige Maps von Schiffen die nicht mehr existieren
-        cleanupMaps(currentMMSIs, options);
-        
-        messageIdCounter = (messageIdCounter + 1) % 10;
-        const hasNewClients = newClients.length > 0;
-        const nowTimestamp = Date.now();
-        const vesselFinderUpdateDue = options.vesselFinderEnabled && 
-          (nowTimestamp - vesselFinderLastUpdate) >= (options.vesselFinderUpdateRate * 1000);
-        
-        let sentCount = 0;
-        let unchangedCount = 0;
-        let vesselFinderCount = 0;
-        
-        filtered.forEach(vessel => {
-          const currentState = JSON.stringify({
-            position: vessel.navigation?.position,
-            speedOverGround: vessel.navigation?.speedOverGround,
-            courseOverGroundTrue: vessel.navigation?.courseOverGroundTrue,
-            headingTrue: vessel.navigation?.headingTrue,
-            state: vessel.navigation?.state,
-            name: vessel.name,
-            callSign: vessel.callSign
-          });
-          
-          const previousState = previousVesselsState.get(vessel.mmsi);
-          const hasChanged = !previousState || previousState !== currentState || hasNewClients;
-          
-          // TCP Resend Check
-          const lastBroadcast = lastTCPBroadcast.get(vessel.mmsi) || 0;
-          const timeSinceLastBroadcast = nowTimestamp - lastBroadcast;
-          const needsTCPResend = timeSinceLastBroadcast >= (options.tcpResendInterval*1000);
-          
-          if (!hasChanged && !vesselFinderUpdateDue && !needsTCPResend) {
-            unchangedCount++;
-            return;
-          }
-          
-          // Filtere Schiffe ohne Name und Callsign aus
-          const hasValidName = vessel.name && vessel.name.toLowerCase() !== 'unknown';
-          const hasValidCallsign = vessel.callSign && vessel.callSign.toLowerCase() !== 'unknown' && vessel.callSign !== '';
-          
-          if (!hasValidName && !hasValidCallsign) {
-            if (options.logDebugDetails || (!options.logMMSI || vessel.mmsi === options.logMMSI)) {
-              app.debug(`Skipped (no valid name and no valid callsign): ${vessel.mmsi} - Name: "${vessel.name}", Callsign: "${vessel.callSign}"`);
-            }
-            unchangedCount++;
-            return;
-          }
-          
-          previousVesselsState.set(vessel.mmsi, currentState);
-          
-          // Bestimme ob an TCP gesendet werden soll
-          const sendToTCP = hasChanged || needsTCPResend;
-          
-          // Debug-Logging für spezifische MMSI
-          const shouldLogDebug = (options.logDebugDetails && options.logDebugAIS) || (options.logMMSI && vessel.mmsi === options.logMMSI);
-          
-          // Type 1
-          const payload1 = AISEncoder.createPositionReport(vessel, options);
-          if (payload1) {
-            const sentence1 = AISEncoder.createNMEASentence(payload1, 1, 1, messageIdCounter, 'B');
-            
-            if (shouldLogDebug) {
-              app.debug(`[${vessel.mmsi}] Type 1: ${sentence1}`);
-            }
-            
-            if (sendToTCP) {
-              broadcastTCP(sentence1);
-              sentCount++;
-              lastTCPBroadcast.set(vessel.mmsi, nowTimestamp);
-            }
-            
-            // VesselFinder: nur Type 1 Nachrichten und nur wenn Position nicht älter als 5 Minuten
-            if (vesselFinderUpdateDue) {
-              let posTimestamp = vessel.navigation?.position?.timestamp;
-              if (!posTimestamp && vessel.navigation?.position?.value) {
-                posTimestamp = vessel.navigation.position.value.timestamp;
-              }
-              
-              if (posTimestamp) {
-                const posAge = nowTimestamp - new Date(posTimestamp).getTime();
-                const fiveMinutes = 5 * 60 * 1000;
-                
-                if (posAge <= fiveMinutes) {
-                  sendToVesselFinder(sentence1, options);
-                  vesselFinderCount++;
-                } else if (shouldLogDebug) {
-                  app.debug(`[${vessel.mmsi}] Skipped VesselFinder (position age: ${Math.floor(posAge/60000)}min)`);
-                }
-              }
-            }
-          }
-          
-          // Type 5 - nur an TCP Clients, NICHT an VesselFinder
-          const shouldSendType5 = vessel.callSign && vessel.callSign.length > 0 && 
-                                  (vessel.callSign !== 'UNKNOWN' || !options.skipWithoutCallsign);
-          
-          if (shouldSendType5 && sendToTCP) {
-            const payload5 = AISEncoder.createStaticVoyage(vessel);
-            if (payload5) {
-              if (payload5.length <= 62) {
-                const sentence5 = AISEncoder.createNMEASentence(payload5, 1, 1, messageIdCounter, 'B');
-                
-                if (shouldLogDebug) {
-                  app.debug(`[${vessel.mmsi}] Type 5: ${sentence5}`);
-                }
-                
-                broadcastTCP(sentence5);
-              } else {
-                const fragment1 = payload5.substring(0, 62);
-                const fragment2 = payload5.substring(62);
-                const sentence5_1 = AISEncoder.createNMEASentence(fragment1, 2, 1, messageIdCounter, 'B');
-                const sentence5_2 = AISEncoder.createNMEASentence(fragment2, 2, 2, messageIdCounter, 'B');
-                
-                if (shouldLogDebug) {
-                  app.debug(`[${vessel.mmsi}] Type 5 (1/2): ${sentence5_1}`);
-                  app.debug(`[${vessel.mmsi}] Type 5 (2/2): ${sentence5_2}`);
-                }
-                
-                broadcastTCP(sentence5_1);
-                broadcastTCP(sentence5_2);
-              }
-            }
-          }
-        });
-        
-        if (hasNewClients) {
-          newClients = [];
-        }
-        
-        if (vesselFinderUpdateDue) {
-          vesselFinderLastUpdate = nowTimestamp;
-          app.debug(`VesselFinder: sent ${vesselFinderCount} vessels`);
-        }
-        
-        app.debug(`${reason}: sent ${sentCount}, unchanged ${unchangedCount}, clients ${tcpClients.length}`);
-        
-      } catch (err) {
-        app.error(`Error processing vessels: ${err}`);
-      }
-    }).catch(err => {
-      app.error(`Error in processVessels: ${err}`);
-    });
+    features.push(feature);
   }
   
-  function cleanupMaps(currentMMSIs, options) {
-    // Entferne Einträge aus previousVesselsState
-    let removedFromState = 0;
-    for (const mmsi of previousVesselsState.keys()) {
-      if (!currentMMSIs.has(mmsi)) {
-        previousVesselsState.delete(mmsi);
-        removedFromState++;
+  return { points: features, routes: routes };
+}
+
+module.exports = function(app) {
+  let timer = null;
+  let cachedResourceSet = null;
+  let cachedRoutes = {};
+  let pluginRouteIds = new Set();
+  let RESOURCESET_NAME = 'Sperrungen';
+  const RESOURCE_ID = 'blocked-waterways-nl';
+
+  const plugin = {
+    id: 'signalk-vaarweginformatie-blocked',
+    name: 'Vaarweginformatie BLOCKED (GeoJSON for Freeboard-SK & OpenCPN)',
+    description: 'Fetches blocked waterways from vaarweginformatie.nl and provides them via SignalK Resource Provider API.',
+    schema: {
+      type: 'object',
+      properties: {
+        language: { 
+          type: 'boolean', 
+          title: 'Sprache: Deutsch (Language: German / Taal: Duits)', 
+          default: true,
+          description: 'Wenn deaktiviert: Englisch (If disabled: English / Indien uitgeschakeld: Engels)'
+        },
+        "All areas": { type: 'boolean', title: 'Alle Gebiete (All areas / Alle gebieden)', default: true },
+        "Algemeen Nederland": { type: 'boolean', title: 'Allgemein Niederlande (General Netherlands / Algemeen Nederland)', default: false },
+        "Noordzee": { type: 'boolean', title: 'Nordsee (North Sea / Noordzee)', default: false },
+        "Eems": { type: 'boolean', title: 'Ems (Ems / Eems)', default: false },
+        "Waddenzee": { type: 'boolean', title: 'Wattenmeer (Wadden Sea / Waddenzee)', default: false },
+        "Groningen": { type: 'boolean', title: 'Groningen (Groningen / Groningen)', default: false },
+        "Fryslan": { type: 'boolean', title: 'Friesland (Friesland / Fryslan)', default: false },
+        "Drenthe": { type: 'boolean', title: 'Drenthe (Drenthe / Drenthe)', default: false },
+        "Overijssel": { type: 'boolean', title: 'Overijssel (Overijssel / Overijssel)', default: false },
+        "Gelderland": { type: 'boolean', title: 'Gelderland (Gelderland / Gelderland)', default: false },
+        "Ijsselmeer": { type: 'boolean', title: 'IJsselmeer (IJsselmeer / IJsselmeer)', default: false },
+        "Flevoland": { type: 'boolean', title: 'Flevoland (Flevoland / Flevoland)', default: false },
+        "Utrecht": { type: 'boolean', title: 'Utrecht (Utrecht / Utrecht)', default: false },
+        "Noord-Holland": { type: 'boolean', title: 'Nordholland (North Holland / Noord-Holland)', default: false },
+        "Zuid-Holland": { type: 'boolean', title: 'Südholland (South Holland / Zuid-Holland)', default: false },
+        "Zeeland": { type: 'boolean', title: 'Zeeland (Zeeland / Zeeland)', default: false },
+        "Noord-Brabant": { type: 'boolean', title: 'Nordbrabant (North Brabant / Noord-Brabant)', default: false },
+        "Limburg": { type: 'boolean', title: 'Limburg (Limburg / Limburg)', default: false },
+        pollIntervalHours: { type: 'number', title: 'Abfrageintervall in Stunden (Polling interval in hours)', default: 24 },
+        daysSpan: { type: 'number', title: 'Anzahl Tage (max 60) (Number of days)', default: 7 },
+        openCpnGeoJsonPathRoutes: { type: 'string', title: 'Pfad + Dateiname der GPX Datei mit gesperrten Strecken für OpenCpn (Path + filename of GPX file with closed routes for OpenCPN)' },
+        openCpnGeoJsonPathWaypoints: { type: 'string', title: 'Pfad + Dateiname der GPX Datei mit gesperrten Objekten für OpenCpn (Path + filename of GPX file with closed objects for OpenCPN)' },
+        movePointMeters: { type: 'number', title: 'Punktverschiebung in Metern (Point offset in meters)', default: 5 },
+        pointSize: { type: 'number', title: 'Größe der Punkte (Size of points in map)', default: 10 },
+        colorHex: { type: 'string', title: 'Farbe der Punkte (Color of points in map - hex value)', default: '#FF0000' }
       }
-    }
-    
-    // Entferne Einträge aus lastTCPBroadcast
-    let removedFromBroadcast = 0;
-    for (const mmsi of lastTCPBroadcast.keys()) {
-      if (!currentMMSIs.has(mmsi)) {
-        lastTCPBroadcast.delete(mmsi);
-        removedFromBroadcast++;
+    },
+
+    start: function(options) {
+      // Speichere Optionen für späteren Zugriff
+      plugin.lastOptions = options;
+      
+      // Sprache bestimmen
+      const languageIsGerman = options.language !== false;
+      RESOURCESET_NAME = languageIsGerman ? 'Sperrungen' : 'Closures';
+      
+      const selectedIds = options["All areas"] ? [] : Object.keys(AREA_MAP)
+        .filter((name) => options[name])
+        .map((name) => AREA_MAP[name]);
+
+      const pollHours = Number(options.pollIntervalHours) || 24;
+      const days = clampDays(options.daysSpan ?? 7);
+      const colorHex = options.colorHex || '#FF0000';
+      const pointSize = options.pointSize || 10;
+      const movePointMeters = Number(options.movePointMeters) || 5;
+
+      const doFetch = async () => {
+        try {
+          const now = new Date();
+          const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+          const validFromMs = midnight.getTime();
+          const validUntilMs = validFromMs + days * 24 * 60 * 60 * 1000;
+          const url = buildApiUrl(validFromMs, validUntilMs, selectedIds);
+          app.debug(`Fetching data: ${url}`);
+          const { data } = await axios.get(url, { headers: { Accept: 'application/json' } });
+
+          app.debug(`Raw API response type: ${typeof data}, isArray: ${Array.isArray(data)}`);
+          
+          const messages = Array.isArray(data)
+            ? data
+            : Array.isArray(data.messages)
+            ? data.messages
+            : Array.isArray(data.summaries)
+            ? data.summaries
+            : [];
+
+          app.debug(`Found ${messages.length} messages in API response`);
+
+          const geoData = toGeoJSON(messages, movePointMeters, languageIsGerman);
+
+          app.debug(`GeoData: ${geoData.points.length} points, ${geoData.routes.length} routes`);
+
+          // Alte Daten löschen
+          cachedResourceSet = null;
+          pluginRouteIds.clear();
+          cachedRoutes = {};
+
+          // ResourceSet für Punkte erstellen und cachen
+          const resourceDescription = languageIsGerman 
+            ? 'Gesperrte Wasserstraßen von vaarweginformatie.nl'
+            : 'Blocked waterways from vaarweginformatie.nl';
+            
+          cachedResourceSet = {
+            type: 'ResourceSet',
+            name: RESOURCESET_NAME,
+            description: resourceDescription,
+            styles: {
+              default: {
+                width: pointSize,
+                stroke: colorHex,
+                fill: colorHex + '80'
+              }
+            },
+            values: {
+              features: geoData.points
+            }
+          };
+          
+          // Routen cachen (für routes Provider)
+          geoData.routes.forEach((route, index) => {
+            const routeId = `blocked-route-${index}-${Date.now()}`;
+            pluginRouteIds.add(routeId);
+            cachedRoutes[routeId] = {
+              name: route.name,
+              description: route.description,
+              distance: route.distance,
+              feature: {
+                type: 'Feature',
+                geometry: {
+                  type: 'LineString',
+                  coordinates: route.coordinates
+                },
+                properties: {
+                  fairway: route.fairway
+                }
+              }
+            };
+          });
+          
+          app.debug(`ResourceSet updated (${geoData.points.length} points, ${geoData.routes.length} routes)`);
+
+          // Optional: OpenCPN GPX Dateien schreiben
+          if (options.openCpnGeoJsonPathRoutes && geoData.routes.length > 0) {
+            const routesGPX = generateRoutesGPX(geoData.routes, colorHex, languageIsGerman);
+            fs.writeFileSync(options.openCpnGeoJsonPathRoutes, routesGPX, 'utf8');
+            app.debug(`Routes GPX file written: ${options.openCpnGeoJsonPathRoutes}`);
+          }
+          
+          if (options.openCpnGeoJsonPathWaypoints && geoData.points.length > 0) {
+            const waypointsGPX = generateWaypointsGPX(geoData.points, languageIsGerman);
+            fs.writeFileSync(options.openCpnGeoJsonPathWaypoints, waypointsGPX, 'utf8');
+            app.debug(`Waypoints GPX file written: ${options.openCpnGeoJsonPathWaypoints}`);
+          }
+        } catch (err) {
+          app.error(`Fetch error: ${err.message}`);
+        }
+      };
+
+      // Resource Provider für Sperrungen (Punkte) registrieren
+      const sperrungProvider = {
+        type: RESOURCESET_NAME,
+        methods: {
+          listResources: (params) => {
+            return new Promise((resolve, reject) => {
+              if (cachedResourceSet) {
+                const result = {};
+                result[RESOURCE_ID] = cachedResourceSet;
+                resolve(result);
+              } else {
+                resolve({});
+              }
+            });
+          },
+          getResource: (id, property) => {
+            return new Promise((resolve, reject) => {
+              if (id === RESOURCE_ID && cachedResourceSet) {
+                if (property) {
+                  resolve(cachedResourceSet[property]);
+                } else {
+                  resolve(cachedResourceSet);
+                }
+              } else {
+                reject(new Error('Resource not found'));
+              }
+            });
+          },
+          setResource: (id, value) => {
+            return Promise.reject(new Error('setResource not supported - resources are read-only'));
+          },
+          deleteResource: (id) => {
+            return new Promise((resolve, reject) => {
+              if (id === RESOURCE_ID && cachedResourceSet) {
+                cachedResourceSet = null;
+                resolve();
+              } else {
+                reject(new Error('Resource not found'));
+              }
+            });
+          }
+        }
+      };
+      
+      // Resource Provider für Routes (Linien) registrieren
+      const routeProvider = {
+        type: 'routes',
+        methods: {
+          listResources: (params) => {
+            return new Promise((resolve, reject) => {
+              resolve(cachedRoutes);
+            });
+          },
+          getResource: (id, property) => {
+            return new Promise((resolve, reject) => {
+              if (cachedRoutes[id]) {
+                if (property) {
+                  resolve(cachedRoutes[id][property]);
+                } else {
+                  resolve(cachedRoutes[id]);
+                }
+              } else {
+                reject(new Error('Route not found'));
+              }
+            });
+          },
+          setResource: (id, value) => {
+            return Promise.reject(new Error('setResource not supported - resources are read-only'));
+          },
+          deleteResource: (id) => {
+            return new Promise((resolve, reject) => {
+              // Nur vom Plugin erstellte Routes können gelöscht werden
+              if (pluginRouteIds.has(id) && cachedRoutes[id]) {
+                delete cachedRoutes[id];
+                pluginRouteIds.delete(id);
+                resolve();
+              } else {
+                reject(new Error('Route not found or not deletable'));
+              }
+            });
+          }
+        }
+      };
+
+      try {
+        app.registerResourceProvider(sperrungProvider);
+        app.registerResourceProvider(routeProvider);
+        app.debug('Resource providers registered');
+      } catch (error) {
+        app.error(`Failed to register resource providers: ${error.message}`);
+        return;
       }
-    }
-    
-    if (options.logDebugDetails && (removedFromState > 0 || removedFromBroadcast > 0)) {
-      app.debug(`Map cleanup: removed ${removedFromState} from previousVesselsState, ${removedFromBroadcast} from lastTCPBroadcast`);
-    }
-  }
+
+      // Initiales Fetch und dann regelmäßig
+      doFetch();
+      timer = setInterval(doFetch, pollHours * 60 * 60 * 1000);
+    },
+
+    stop: function() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      // Explizit Cache leeren um Memory Leak zu vermeiden
+      cachedResourceSet = null;
+      cachedRoutes = {};
+      pluginRouteIds.clear();
+    },
+
+    registerWithRouter: function(router) {
+      // Config endpoint - liefert aktuelle Konfiguration
+      router.get('/config', (req, res) => {
+        res.json({
+          configuration: plugin.lastOptions || {}
+        });
+      });
+
+      // Configure endpoint - speichert neue Konfiguration
+      router.post('/configure', (req, res) => {
+        const newConfig = req.body.configuration;
+        if (!newConfig) {
+          return res.status(400).json({ error: 'No configuration provided' });
+        }
+        
+        // Speichere Konfiguration
+        plugin.lastOptions = newConfig;
+        app.savePluginOptions(newConfig, (err) => {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+          res.json({ message: 'Configuration saved!' });
+        });
+      });
+
+      // Restart endpoint - startet Plugin neu
+      router.post('/restart', (req, res) => {
+        res.json({ message: 'Plugin restarting...' });
+        
+        // Plugin stoppen und neu starten
+        setTimeout(() => {
+          plugin.stop();
+          setTimeout(() => {
+            if (plugin.lastOptions) {
+              plugin.start(plugin.lastOptions);
+            }
+          }, 500);
+        }, 100);
+      });
+    },
+
+    // Speichere letzte Optionen
+    lastOptions: null
+  };
 
   return plugin;
 };

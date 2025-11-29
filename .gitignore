@@ -1,0 +1,60 @@
+# Node modules
+node_modules/
+
+# Build outputs (Webpack)
+public/
+dist/
+build/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# npm lock file
+package-lock.json
+
+# npm files
+.npmignore
+
+# IDE & Editor
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Misc
+.cache/
+.parcel-cache
+.next
+out
+.nuxt
+dist
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local

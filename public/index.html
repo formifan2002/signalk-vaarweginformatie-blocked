@@ -231,31 +231,79 @@
     const enabledSwitch = document.getElementById('enabledSwitch');
     const helpBtn = document.getElementById('helpBtn');
 
-function detectContext() {
-  // 1. Läuft die Seite im iframe?
-  const inIframe = window.self !== window.top;
+	function detectContext() {
+	  // 1. Läuft die Seite im iframe?
+	  const inIframe = window.self !== window.top;
 
-  // 2. Root Node prüfen (Shadow DOM?)
-  const rootNode = document.documentElement.getRootNode();
-  const inShadowDom = rootNode instanceof ShadowRoot;
+	  // 2. Root Node prüfen (Shadow DOM?)
+	  const rootNode = document.documentElement.getRootNode();
+	  const inShadowDom = rootNode instanceof ShadowRoot;
 
-  // 3. Fragment-Erkennung: fehlen typische Strukturen?
-  // (z. B. kein <head> oder <body>)
-  const isFragment = !document.head || !document.body;
+	  // 3. Fragment-Erkennung: fehlen typische Strukturen?
+	  // (z. B. kein <head> oder <body>)
+	  const isFragment = !document.head || !document.body;
 
-  let context;
-  if (inIframe) {
-    context = "iframe";
-  } else if (inShadowDom) {
-    context = "shadow-dom";
-  } else if (isFragment) {
-    context = "fragment";
-  } else {
-    context = "main-document";
-  }
+	  let context;
+	  if (inIframe) {
+		context = "iframe";
+	  } else if (inShadowDom) {
+		context = "shadow-dom";
+	  } else if (isFragment) {
+		context = "fragment";
+	  } else {
+		context = "main-document";
+	  }
 
-  return context;
-}
+	  return context;
+	}
+
+	// ============================================================
+	// AUTOMATISCHER START-MODUS (detectContext + ?mode=map)
+	// ============================================================
+
+	async function startAutoMode() {
+	  const params = new URLSearchParams(window.location.search);
+	  const mode = params.get("mode");
+	  const context = detectContext();
+
+	  const mustShowMap =
+		mode === "map" ||
+		context !== "main-document";
+
+	  if (!mustShowMap) return;
+
+	  // Buttons ausblenden
+	  document.getElementById("viewToggle").style.display = "none";
+
+	  // Ansicht umschalten
+	  document.getElementById("configView").classList.remove("active");
+	  document.getElementById("mapView").classList.add("active");
+
+	  // WICHTIG: Warten bis initialConfig gesetzt ist!
+	  const waitForConfig = () =>
+		new Promise(resolve => {
+		  const timer = setInterval(() => {
+			if (initialConfig !== null) {
+			  clearInterval(timer);
+			  resolve();
+			}
+		  }, 50);
+		});
+
+	  await waitForConfig();
+
+	  // Jetzt ist initialConfig sicher gesetzt → Map laden
+	  initMap();
+	  await loadMapData();
+
+	  // Optional Poll-Interval starten
+	  if (initialConfig.pollIntervalHours) {
+		mapUpdateTimer = setInterval(
+		  loadMapData,
+		  initialConfig.pollIntervalHours * 3600000
+		);
+	  }
+	}
 
 
     function showStatus(message, isError = false) {
@@ -896,6 +944,8 @@ function detectContext() {
 
     // Initial setup
     updateMapLabels();
+	startAutoMode();
+	
   </script>
 </body>
 </html>

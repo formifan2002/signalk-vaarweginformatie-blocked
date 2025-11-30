@@ -329,6 +329,7 @@ function toGeoJSON(messages, movePointMeters, languageIsGerman) {
         fairway: group.fairway || undefined,
         status: 'BLOCKED',
         blockageCount: group.blockages.length,
+		blockages: group.blockages,
         source: 'vaarweginformatie.nl'
       }
     };

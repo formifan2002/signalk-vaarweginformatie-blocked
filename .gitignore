@@ -5,10 +5,10 @@ node_modules/
 public/
 !public/index.html
 !public/icon.png
-!translations.js
-!style.css
-!date-range-component.js
-!api-bridge.js
+!public/translations.js
+!public/style.css
+!public/date-range-component.js
+!public/api-bridge.js
 dist/
 build/
 

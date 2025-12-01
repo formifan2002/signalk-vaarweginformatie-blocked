@@ -7,6 +7,7 @@
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -177,7 +178,7 @@
 		<span id="mapClosuresCount">0</span>
 	  </div>
 	  <div style="margin-top:0.5em;">
-		<button type="button" id="toggleFutureBtn">Nur heute gültige Sperrungen</button>
+		<date-range-component maxDays="60"></date-range-component>
 	  </div>
 	</div>
 
@@ -185,6 +186,9 @@
 
   <!-- External Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>
+  <script type="module" src="date-range-component.js"></script>
   <script src="translations.js"></script>
   <script src="api-bridge.js"></script>
 
@@ -200,7 +204,7 @@
     let currentLang = 'de';
     let bridge = new VaarweginformatieApiBridge();
 	let data = null;
-	let showFuture = true;
+	let mapFilter = {};;
 
     // UI Elements
     const mainTitle = document.getElementById('mainTitle');
@@ -531,7 +535,6 @@
         }
       });
 
-      console.log('collectConfig result:', configuration);
       return configuration;
     }
 
@@ -735,12 +738,10 @@
 
     // Überwache Eingabefelder für Änderungen
     document.getElementById('configForm').addEventListener('input', (e) => {
-      console.log('Form input event:', e.target.name);
       updateMapButtonState();
     });
     
     document.getElementById('configForm').addEventListener('change', (e) => {
-      console.log('Form change event:', e.target.name);
       updateMapButtonState();
     });
 
@@ -776,8 +777,6 @@
 
 	async function loadMapData() {
 	  try {
-		// Feststellen, ob dies das Hauptteil im DOM Baum ist
-		console.log("Aktueller Kontext:", detectContext());
 
 		data = await bridge.getAllData(currentLang);
 		renderMapLayers(data);
@@ -842,13 +841,26 @@
 			const now = new Date();
 
 			// Prüfen, ob mindestens ein Blockage aktuell gültig ist
-			const isActiveToday = blockages.some(b => {
-			  const start = b.startDate ? new Date(b.startDate) : null;
-			  const end = b.endDate ? new Date(b.endDate) : null;
-			  return start && start <= now && (!end || now <= end);
+			const isActiveInMapFilter = blockages.some(b => {
+			  // Wenn mapFilter leer ist oder beide Werte null -> immer true
+			  if (!mapFilter || Object.keys(mapFilter).length === 0 ||
+				  (mapFilter.start === null && mapFilter.end === null)) {
+				return true;
+			  }
+
+			  // Blockage-Start/Ende als Unix-Timestamps
+			  const start = b.startDate ? new Date(b.startDate).getTime() : null;
+			  const end   = b.endDate   ? new Date(b.endDate).getTime()   : null;
+
+			  // Filtergrenzen setzen
+			  const filterStart = mapFilter.start ?? -Infinity;
+			  const filterEnd   = mapFilter.end   ?? Infinity;
+
+			  // Überschneidung prüfen
+			  return (start ?? -Infinity) <= filterEnd && (end ?? Infinity) >= filterStart;
 			});
 
-			if (showFuture || isActiveToday) {
+			if (isActiveInMapFilter) {
 			  L.geoJSON(feature, {
 				pointToLayer: (f, latlng) => L.circleMarker(latlng, {
 				  radius: width,
@@ -862,12 +874,25 @@
 				  let html = '<div class="popup-content">';
 				  if (f.properties?.name) html += `<strong>${f.properties.name}</strong><br>`;
 	              if (blockages.length > 0) {
-	                const label = currentLang === 'de' ? 'Sperrungen:' : 'Closures:';
-	                html += `<br><em>${label}</em><ul>`;
+	                const labelClosure = currentLang === 'de' ? 'Sperrungen:' : 'Closures:';
+					const labelFrom = currentLang === 'de' ? 'ab ' : 'from ';
+	                html += `<br><em>${labelClosure}</em><ul>`;
 	                blockages.forEach(b => {
-	              	const start = b.startDate ? new Date(b.startDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US') : '';
-	              	const end = b.endDate ? new Date(b.endDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US') : '';
-	              	html += `<li>${start}${end ? ' – ' + end : ''}</li>`;
+					const opts = {
+					  day: "2-digit",
+					  month: "2-digit",
+					  year: "2-digit",
+					  hour: "2-digit",
+					  minute: "2-digit"
+					};
+					const start = b.startDate 
+					  ? new Date(b.startDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US', opts) 
+					  : '';
+
+					const end = b.endDate 
+					  ? new Date(b.endDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US', opts) 
+					  : '';
+	              	html += `<li>${end ? '' : labelFrom}${start}${end ? ' – ' + end : ''}</li>`;
 	                });
 	                html += '</ul>';
 	              }
@@ -900,12 +925,32 @@
 	  }
 	});
 
-	document.getElementById('toggleFutureBtn').addEventListener('click', () => {
-	  showFuture = !showFuture;
-	  updateMapLabels(); // Button-Text neu setzen
+    document.querySelector("date-range-component").addEventListener("dateRangeSelected", e => {
+      const { start, end } = e.detail;
+	  if (start || end) {
+		mapFilter = {
+		  start: start 
+			? (() => {
+				const d = flatpickr.parseDate(start, "d.m.Y");
+				d.setHours(0,0,0,0); // Tagesanfang
+				return d.getTime();
+			  })()
+			: null,
+		  end: end 
+			? (() => {
+				const d = flatpickr.parseDate(end, "d.m.Y");
+				d.setHours(23,59,59,999); // Tagesende
+				return d.getTime();
+			  })()
+			: null
+		};
+	  } else {
+	  	 mapFilter = {};
+	  }
+      console.log(`✅ Rückgabe: Start = ${start}, Ende = ${end}`);
 	  loadMapData();     // Karte neu laden
-	});
-
+    });
+	
     // View Toggle
     document.querySelectorAll('.view-toggle button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -936,10 +981,12 @@
 	  document.getElementById('mapWaterwaysLabel').textContent = t.mapWaterwaysLabel;
 	  document.getElementById('mapClosuresLabel').textContent = t.mapClosuresLabel;
 
-	  // Toggle-Button initialisieren
-	  document.getElementById('toggleFutureBtn').textContent = showFuture
-		? t.mapClosureAll
-		: t.mapClosureToday;
+      const comp = document.querySelector("date-range-component");
+	  comp.setAttribute("label-start", t.mapClosureStart);
+	  comp.setAttribute("label-end", t.mapClosureEnd);
+	  comp.setAttribute("label-today", t.mapClosureToday);
+	  comp.setAttribute("label-all", t.mapClosureAll);
+
 	}
 
     // Initial setup

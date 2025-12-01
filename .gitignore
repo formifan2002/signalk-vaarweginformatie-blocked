@@ -5,6 +5,10 @@ node_modules/
 public/
 !public/index.html
 !public/icon.png
+!translations.js
+!style.css
+!date-range-component.js
+!api-bridge.js
 dist/
 build/
 
@@ -32,6 +36,7 @@ package-lock.json
 
 # OS
 .DS_Store
+
 Thumbs.db
 .env.local
 .env.*.local

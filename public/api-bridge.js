@@ -1,8 +1,3 @@
-/**
- * API Bridge für Vaarweginformatie Plugin v3
- * Vereinfachte Version für index.html
- */
-
 class VaarweginformatieApiBridge {
   constructor() {
     this.configUrl = '/plugins/signalk-vaarweginformatie-blocked/config';

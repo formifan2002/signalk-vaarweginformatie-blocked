@@ -8,6 +8,9 @@
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -166,21 +169,26 @@
   <!-- Map View -->
   <div class="map-view" id="mapView">
     <div id="map"></div>
-	<div class="map-info" id="mapInfo">
-	  <div>
-		<input type="checkbox" id="toggleWaterways" checked>
-		<strong id="mapWaterwaysLabel">Wasserwege:</strong>
-		<span id="mapWaterwaysCount">0</span>
-	  </div>
-	  <div>
-		<input type="checkbox" id="toggleClosures" checked>
-		<strong id="mapClosuresLabel">Sperrungen:</strong>
-		<span id="mapClosuresCount">0</span>
-	  </div>
-	  <div style="margin-top:0.5em;">
-		<date-range-component maxDays="60"></date-range-component>
-	  </div>
-	</div>
+    <div class="map-info" id="mapInfo">
+      <div>
+        <input type="checkbox" id="toggleWaterways" checked>
+        <strong id="mapWaterwaysLabel">Wasserwege:</strong>
+        <span id="mapWaterwaysCount">0</span>
+      </div>
+      <div>
+        <input type="checkbox" id="toggleClosures" checked>
+        <strong id="mapClosuresLabel">Sperrungen:</strong>
+        <span id="mapClosuresCount">0</span>
+      </div>
+      <div style="margin-top:0.5em;">
+        <date-range-component maxDays="60"></date-range-component>
+      </div>
+      <div style="margin-top:0.5em;">
+        <strong id="searchLabel">Suche:</strong>
+        <input type="text" id="searchInput" placeholder="Name der Sperrung..." style="width: 100%; padding: 0.3em; margin-top: 0.3em;">
+        <div id="searchResults" style="max-height: 150px; overflow-y: auto; margin-top: 0.3em; display: none;"></div>
+      </div>
+    </div>
 
   </div>
 
@@ -188,6 +196,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>
+  <!-- MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script type="module" src="date-range-component.js"></script>
   <script src="translations.js"></script>
   <script src="api-bridge.js"></script>
@@ -777,136 +787,188 @@
 
 	async function loadMapData() {
 	  try {
-
 		data = await bridge.getAllData(currentLang);
-		renderMapLayers(data);
+		const counts = renderMapLayers(data);
 
-		// Anzahl der tatsächlich dargestellten Layer
-		const waterwaysCount = mapLayers.waterways.getLayers().length;
-		const closuresCount = mapLayers.closures.getLayers().length;
+		document.getElementById('mapWaterwaysCount').textContent = counts.waterways;
+		document.getElementById('mapClosuresCount').textContent = counts.closures;
+    // Suchfunktion initialisieren
+    initSearch();
 
-		document.getElementById('mapWaterwaysCount').textContent = waterwaysCount;
-		document.getElementById('mapClosuresCount').textContent = closuresCount;
 	  } catch (err) {
 		console.error('Map data error:', err);
 	  }
 	}
 
-    function renderMapLayers(data) {
-      mapLayers.waterways.clearLayers();
-      mapLayers.closures.clearLayers();
+  function descriptionToHtml(description, communication, currentLang = 'de') {
+    if (!description || typeof description !== 'string') return '';
 
-	if (data.waterways && typeof data.waterways === 'object') {
-	  Object.entries(data.waterways).forEach(([key, entry]) => {
-		// Nur Keys, die mit "blocked-route-" anfangen
-		if (key.startsWith('blocked-route-')) {
-		  const feature = entry.feature;
-		  if (feature?.geometry?.type === 'LineString' || feature?.geometry?.type === 'MultiLineString') {
-			L.geoJSON(feature, {
-			  style: { color: initialConfig.colorHex || '#ff6b6b', weight: 3, opacity: 0.8 },
-			  onEachFeature: (f, l) => {
-				const name = entry.name || f.properties?.name;
-				const description = entry.description || f.properties?.description;
+    // Beschreibung in einzelne Berichte aufteilen (Separator: " #")
+    const reports = description
+      .split(' #')
+      .map(s => s.trim())
+      .filter(Boolean);
 
-				let html = '<div class="popup-content">';
-				if (name) html += `<strong>${name}</strong><br>`;
-				if (description) {
-				  // " | " durch Zeilenumbrüche ersetzen
-				  html += description.replace(/\s*\|\s*/g, '<br>');
-				}
-				html += '</div>';
+    let html = '';
 
-				if (name || description) {
-				  l.bindPopup(html);
-				}
-			  }
-			}).addTo(mapLayers.waterways);
-		  }
-		}
-	  });
-	}
+    reports.forEach(rep => {
+      // Header und Blockages trennen: erstes ":" ist die Trennstelle
+      const colonIdx = rep.indexOf(':');
+      if (colonIdx === -1) {
+        // Fallback: kein ":" gefunden → alles als ein Bullet unter einem generischen Header
+        const labelGeneric = currentLang === 'de' ? 'Bericht' : 'Report';
+        html += `<br><strong>${labelGeneric}</strong><ul><li>${escapeHtml(rep)}</li></ul>`;
+        return;
+      }
 
+      const header = rep.slice(0, colonIdx).trim();      // "Bericht - reasonCode"
+      const body   = rep.slice(colonIdx + 1).trim();     // "blockage1, blockage2, ..."
 
-	if (data.closures && typeof data.closures === 'object') {
-	  Object.values(data.closures).forEach(set => {
-		const features = set?.values?.features;
-		if (Array.isArray(features)) {
-		  const styleCfg = set.styles?.default || {};
-		  const stroke = styleCfg.stroke || '#333';
-		  const fill = styleCfg.fill || (initialConfig.colorHex || '#4ecdc4');
-		  const width = Number(styleCfg.width) || (initialConfig.pointSize || 6);
+      // Blockages durch "," getrennt
+      const items = body
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
 
-		  features.forEach(feature => {
-			const blockages = feature.properties?.blockages || [];
-			const now = new Date();
+      html += `<br><strong>${escapeHtml(header)}</strong><ul>`;
+      items.forEach(item => {
+        html += `<li>${escapeHtml(item)}</li>`;
+      });
+      html += `</ul>`;
+    });
 
-			// Prüfen, ob mindestens ein Blockage aktuell gültig ist
-			const isActiveInMapFilter = blockages.some(b => {
-			  // Wenn mapFilter leer ist oder beide Werte null -> immer true
-			  if (!mapFilter || Object.keys(mapFilter).length === 0 ||
-				  (mapFilter.start === null && mapFilter.end === null)) {
-				return true;
-			  }
-
-			  // Blockage-Start/Ende als Unix-Timestamps
-			  const start = b.startDate ? new Date(b.startDate).getTime() : null;
-			  const end   = b.endDate   ? new Date(b.endDate).getTime()   : null;
-
-			  // Filtergrenzen setzen
-			  const filterStart = mapFilter.start ?? -Infinity;
-			  const filterEnd   = mapFilter.end   ?? Infinity;
-
-			  // Überschneidung prüfen
-			  return (start ?? -Infinity) <= filterEnd && (end ?? Infinity) >= filterStart;
-			});
-
-			if (isActiveInMapFilter) {
-			  L.geoJSON(feature, {
-				pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-				  radius: width,
-				  fillColor: fill,
-				  color: stroke,
-				  weight: 2,
-				  opacity: 0.8,
-				  fillOpacity: 0.7
-				}),
-				onEachFeature: (f, l) => {
-				  let html = '<div class="popup-content">';
-				  if (f.properties?.name) html += `<strong>${f.properties.name}</strong><br>`;
-	              if (blockages.length > 0) {
-	                const labelClosure = currentLang === 'de' ? 'Sperrungen:' : 'Closures:';
-					const labelFrom = currentLang === 'de' ? 'ab ' : 'from ';
-	                html += `<br><em>${labelClosure}</em><ul>`;
-	                blockages.forEach(b => {
-					const opts = {
-					  day: "2-digit",
-					  month: "2-digit",
-					  year: "2-digit",
-					  hour: "2-digit",
-					  minute: "2-digit"
-					};
-					const start = b.startDate 
-					  ? new Date(b.startDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US', opts) 
-					  : '';
-
-					const end = b.endDate 
-					  ? new Date(b.endDate).toLocaleString(currentLang === 'de' ? 'de-DE' : 'en-US', opts) 
-					  : '';
-	              	html += `<li>${end ? '' : labelFrom}${start}${end ? ' – ' + end : ''}</li>`;
-	                });
-	                html += '</ul>';
-	              }
-				  html += '</div>';
-				  l.bindPopup(html);
-				}
-			  }).addTo(mapLayers.closures);
-			}
-		  });
-		}
-	  });
-	}
-
+    // Communication anhängen, falls vorhanden
+    if (communication && typeof communication === 'string' && communication.trim()) {
+      const colonIdx = communication.indexOf(':');
+      if (colonIdx !== -1) {
+        // Teil vor dem ":" als fette Überschrift
+        const header = communication.slice(0, colonIdx + 1).trim();  // inkl. ":"
+        const body = communication.slice(colonIdx + 1).trim();
+        html += `<br><strong>${escapeHtml(header)}</strong><br>${escapeHtml(body)}`;
+      } else {
+        // Kein ":" gefunden → gesamten Text normal anzeigen
+        html += `<br>${escapeHtml(communication)}`;
+      }
     }
+
+    return html;
+  }
+  // Einfache HTML-Escaping-Funktion
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+	function renderMapLayers(data) {
+	  mapLayers.waterways.clearLayers();
+	  mapLayers.closures.clearLayers();
+	  
+	  let waterwaysCount = 0;
+	  let closuresCount = 0;
+
+	  if (data.waterways && typeof data.waterways === 'object') {
+		Object.entries(data.waterways).forEach(([key, entry]) => {
+		  // Nur Keys, die mit "blocked-route-" anfangen
+		  if (key.startsWith('blocked-route-')) {
+			const feature = entry.feature;
+			if (feature?.geometry?.type === 'LineString' || feature?.geometry?.type === 'MultiLineString') {
+			  L.geoJSON(feature, {
+				style: { color: initialConfig.colorHex || '#ff6b6b', weight: 3, opacity: 0.8 },
+				onEachFeature: (f, l) => {
+				  const name = entry.name || f.properties?.name;
+				  const description = entry.description || f.properties?.description;
+
+				  let html = '<div class="popup-content">';
+				  if (name) html += `<strong>${name}</strong><br>`;
+				  if (description) {
+					// " | " durch Zeilenumbrüche ersetzen
+					html += description.replace(/\s*\|\s*/g, '<br>');
+				  }
+				  html += '</div>'
+				  if (name || description) {
+					l.bindPopup(html);
+				  }
+				}
+			  }).addTo(mapLayers.waterways);
+			  waterwaysCount++;
+			}
+		  }
+		});
+	  }
+
+	  if (data.closures && typeof data.closures === 'object') {
+		// Neue Clustergruppe für closures
+		const closureCluster = L.markerClusterGroup();
+
+		Object.values(data.closures).forEach(set => {
+		  const features = set?.values?.features;
+		  if (Array.isArray(features)) {
+			const styleCfg = set.styles?.default || {};
+			const stroke = styleCfg.stroke || '#333';
+			const fill = styleCfg.fill || (initialConfig.colorHex || '#4ecdc4');
+			const width = Number(styleCfg.width) || (initialConfig.pointSize || 6);
+
+			features.forEach(feature => {
+			  // Neue Struktur: berichte statt direkt blockages
+			  const berichte = feature.properties?.berichte || {};
+			  
+			  // Sammle alle blockages aus allen Berichten
+			  let allBlockages = [];
+			  Object.values(berichte).forEach(bericht => {
+				if (bericht.blockages && Array.isArray(bericht.blockages)) {
+				  allBlockages.push(...bericht.blockages);
+				}
+			  });
+
+			  // Prüfen, ob mindestens ein Blockage aktuell gültig ist
+			  const isActiveInMapFilter = allBlockages.some(b => {
+				if (!mapFilter || Object.keys(mapFilter).length === 0 ||
+					(mapFilter.start === null && mapFilter.end === null)) {
+				  return true;
+				}
+				const start = b.startDate ? b.startDate : null;
+				const end   = b.endDate   ? b.endDate   : null;
+				const filterStart = mapFilter.start ?? -Infinity;
+				const filterEnd   = mapFilter.end   ?? Infinity;
+				return (start ?? -Infinity) <= filterEnd && (end ?? Infinity) >= filterStart;
+			  });
+
+			  if (isActiveInMapFilter) {
+				L.geoJSON(feature, {
+				  pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+					radius: width,
+					fillColor: fill,
+					color: stroke,
+					weight: 2,
+					opacity: 0.8,
+					fillOpacity: 0.7
+				  }),
+				  onEachFeature: (f, l) => {
+					let html = '<div class="popup-content">';
+					if (f.properties?.name) html += `<strong>${f.properties.name}</strong><br>`;
+					
+          html +=descriptionToHtml(f.properties?.description,f.properties?.communication,currentLang);
+					html += '</div>';
+					l.bindPopup(html);
+				  }
+				}).eachLayer(l => {
+				  closureCluster.addLayer(l);
+				  closuresCount++;
+				});
+			  }
+			});
+		  }
+		});
+
+		// Clustergruppe dem closures-Layer hinzufügen
+		mapLayers.closures.addLayer(closureCluster);
+	  }
+	  
+	  return { waterways: waterwaysCount, closures: closuresCount };
+	}
+
 
 	// Checkbox-Events
 	document.getElementById('toggleWaterways').addEventListener('change', e => {
@@ -924,6 +986,92 @@
 		mapInstance.removeLayer(mapLayers.closures);
 	  }
 	});
+
+  // Suchfunktion
+  let allMarkers = [];  // Speichert alle Marker mit ihren Daten
+
+  function initSearch() {
+    allMarkers = [];
+    
+    // Sammle alle Marker aus der Clustergruppe
+    mapLayers.closures.eachLayer(layer => {
+      if (layer instanceof L.MarkerClusterGroup) {
+        layer.eachLayer(marker => {
+          const props = marker.feature?.properties;
+          if (props?.name) {
+            allMarkers.push({
+              name: props.name,
+              fairway: props.fairway,
+              marker: marker,
+              latlng: marker.getLatLng()
+            });
+          }
+        });
+      }
+    });
+  }
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const searchTerm = e.target.value.trim().toLowerCase();
+    const resultsDiv = document.getElementById('searchResults');
+    
+    if (searchTerm.length < 2) {
+      resultsDiv.style.display = 'none';
+      resultsDiv.innerHTML = '';
+      return;
+    }
+    
+    // Filtere Marker nach Suchbegriff
+    const matches = allMarkers.filter(item => 
+      item.name.toLowerCase().includes(searchTerm) || 
+      (item.fairway && item.fairway.toLowerCase().includes(searchTerm))
+    );
+    
+    if (matches.length === 0) {
+      resultsDiv.innerHTML = '<div style="padding: 0.5em; color: #999;">Keine Ergebnisse</div>';
+      resultsDiv.style.display = 'block';
+      return;
+    }
+    
+    // Zeige Ergebnisse
+    resultsDiv.innerHTML = '';
+    matches.slice(0, 10).forEach(item => {  // Max 10 Ergebnisse
+      const resultItem = document.createElement('div');
+      resultItem.style.cssText = 'padding: 0.5em; cursor: pointer; border-bottom: 1px solid #eee;';
+      resultItem.innerHTML = `<strong>${escapeHtml(item.name)}</strong>${item.fairway ? '<br><small>' + escapeHtml(item.fairway) + '</small>' : ''}`;
+      
+      resultItem.addEventListener('mouseenter', () => {
+        resultItem.style.backgroundColor = '#f0f0f0';
+      });
+      resultItem.addEventListener('mouseleave', () => {
+        resultItem.style.backgroundColor = '';
+      });
+      
+      resultItem.addEventListener('click', () => {
+        // Zur Sperrung zoomen und Popup öffnen
+        mapInstance.setView(item.latlng, 15);
+        item.marker.openPopup();
+        
+        // Suchfeld leeren und Ergebnisse ausblenden
+        document.getElementById('searchInput').value = '';
+        resultsDiv.style.display = 'none';
+        resultsDiv.innerHTML = '';
+      });
+      
+      resultsDiv.appendChild(resultItem);
+    });
+    
+    resultsDiv.style.display = 'block';
+  });
+
+  // Schließe Suchergebnisse bei Klick außerhalb
+  document.addEventListener('click', e => {
+    const searchInput = document.getElementById('searchInput');
+    const resultsDiv = document.getElementById('searchResults');
+    if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+      resultsDiv.style.display = 'none';
+    }
+  });
 
     document.querySelector("date-range-component").addEventListener("dateRangeSelected", e => {
       const { start, end } = e.detail;
@@ -981,7 +1129,10 @@
 	  document.getElementById('mapWaterwaysLabel').textContent = t.mapWaterwaysLabel;
 	  document.getElementById('mapClosuresLabel').textContent = t.mapClosuresLabel;
 
-      const comp = document.querySelector("date-range-component");
+    document.getElementById('searchLabel').textContent = t.searchLabel || 'Suche:';
+    document.getElementById('searchInput').placeholder = t.searchPlaceholder || 'Name der Sperrung...';
+
+    const comp = document.querySelector("date-range-component");
 	  comp.setAttribute("label-start", t.mapClosureStart);
 	  comp.setAttribute("label-end", t.mapClosureEnd);
 	  comp.setAttribute("label-today", t.mapClosureToday);

@@ -1,9 +1,27 @@
-// SignalK Plugin: signalk-vaarweginformatie-blocked
-// Fetches BLOCKED waterways from vaarweginformatie.nl and provides them as GeoJSON
-// via SignalK Resource Provider API for automatic Freeboard-SK integration
-
+// Revised index.js - helpers moved to ./utils.js
 const fs = require('fs');
 const axios = require('axios');
+
+const {
+  buildApiUrl,
+  calculateDistance,
+  calculateRouteDistance,
+  clampDays,
+  createGroupBlockages,
+  escapeXml,
+  formatBlockageDescription,
+  formatDateForOpenCPN,
+  formatDateISO,
+  formatDateTime,
+  formatDescription,
+  formatDirectionCode,
+  formatTargetGroup,
+  generateRoutesGPX,
+  generateWaypointsGPX,
+  getLimitationCode,
+  movePointEast
+} = require('./utils');
+
 
 // Mapping von Namen auf fmtArea IDs
 const AREA_MAP = {
@@ -26,240 +44,21 @@ const AREA_MAP = {
   "Limburg": 409365
 };
 
-function clampDays(days) {
-  const n = Number(days);
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return Math.min(60, Math.max(1, Math.floor(n)));
-}
 
-function buildApiUrl(validFromMs, validUntilMs, selectedAreas) {
-  const base = 'https://www.vaarweginformatie.nl/frp/api/messages/nts/summaries';
-  const url = new URL(base);
-  url.searchParams.set('validFrom', String(validFromMs));
-  url.searchParams.set('validUntil', String(validUntilMs));
-  url.searchParams.set('ntsTypes', 'FTM');
-  url.searchParams.set('limitationGroup', 'BLOCKED');
-  
-  // Nur wenn nicht "All areas" ausgewählt wurde
-  if (selectedAreas.length > 0) {
-    selectedAreas.forEach((id) => url.searchParams.append('ftmAreas', String(id)));
-  }
-  
-  return url.toString();
-}
-
-// Hilfsfunktion für führende Nullen
-function formatDateTime(dateString) {
-  if (!dateString) return 'unbekannt';
-  const d = new Date(dateString);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${day}.${month}.${year} ${hours}:${minutes}`;
-}
-
-// Formatiere Datum für OpenCPN (DD.MM.YYYY oder DD/MM/YYYY)
-function formatDateForOpenCPN(dateString, languageIsGerman) {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  const separator = languageIsGerman ? '.' : '/';
-  return `${day}${separator}${month}${separator}${year}`;
-}
-
-// Formatiere Datum für OpenCPN ISO Format (2025-11-26T15:41:40Z)
-function formatDateISO(dateString) {
-  if (!dateString) return '';
-  return new Date(dateString).toISOString();
-}
-
-// Generiere GPX für Routes
-function generateRoutesGPX(routes, colorHex, languageIsGerman) {
-  let gpx = `<?xml version="1.0"?>
-<gpx version="1.1" creator="OpenCPN" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www8.garmin.com/xmlschemas/GpxExtensionsv3.xsd" xmlns:opencpn="http://www.opencpn.org">
-`;
-
-  routes.forEach(route => {
-    const startDateFormatted = formatDateForOpenCPN(route.startDate, languageIsGerman);
-    const endDateFormatted = route.endDate ? formatDateForOpenCPN(route.endDate, languageIsGerman) : '';
-    const startISO = formatDateISO(route.startDate);
-    
-    // Bestimme "bis" oder "to" Text
-    let endText = '';
-    if (route.endDate) {
-      endText = languageIsGerman ? `bis ${endDateFormatted}` : `to ${endDateFormatted}`;
-    }
-    
-    gpx += `  <rte>
-    <name>${escapeXml(route.name)}</name>
-    <extensions>
-      <opencpn:start>${startDateFormatted}</opencpn:start>
-      <opencpn:end>${endText}</opencpn:end>
-      <opencpn:planned_departure>${startISO}</opencpn:planned_departure>
-      <opencpn:time_display>GLOBAL SETTING</opencpn:time_display>
-      <opencpn:style style="100" />
-      <gpxx:RouteExtension>
-        <gpxx:IsAutoNamed>false</gpxx:IsAutoNamed>
-        <gpxx:DisplayColor>Red</gpxx:DisplayColor>
-      </gpxx:RouteExtension>
-    </extensions>
-`;
-
-    // Waypoints der Route
-    route.coordinates.forEach((coord, index) => {
-      const [lon, lat] = coord;
-      const isFirstOrLast = index === 0 || index === route.coordinates.length - 1;
-      const sym = isFirstOrLast ? '1st-Active-Waypoint' : 'Symbol-Diamond-Red';
-      
-      gpx += `    <rtept lat="${lat}" lon="${lon}">
-      <time>${startISO}</time>
-      <name>${index + 1}</name>
-      <sym>${sym}</sym>
-      <type>WPT</type>
-      <extensions>
-        <opencpn:waypoint_range_rings visible="false" number="0" step="1" units="0" colour="${colorHex}" />
-        <opencpn:scale_min_max UseScale="false" ScaleMin="2147483646" ScaleMax="0" />
-      </extensions>
-    </rtept>
-`;
-    });
-
-    gpx += `  </rte>
-`;
-  });
-
-  gpx += `</gpx>`;
-  return gpx;
-}
-
-// Generiere GPX für Waypoints (Sperrungen)
-function generateWaypointsGPX(points, languageIsGerman) {
-  const now = new Date().toISOString();
-  const title = languageIsGerman ? 'Sperrungen' : 'Closures';
-  const description = languageIsGerman 
-    ? 'Sperrungen von Objekten (Schleusen, Brücken,...)'
-    : 'Closures of objects (locks, bridges,...)';
-  
-  let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:opencpn="http://www.opencpn.org" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="vwi_waypoints_generator.py -- https://github.com/marcelrv/OpenCPN-Waypoints">
-  <metadata>
-    <name>${title}</name>
-    <desc>${description}</desc>
-    <time>${now}</time>
-  </metadata>
-`;
-
-  points.forEach(point => {
-    const [lon, lat] = point.geometry.coordinates;
-    const name = escapeXml(point.properties.name);
-    const desc = escapeXml(point.properties.description);
-    
-    gpx += `  <wpt lat="${lat}" lon="${lon}">
-    <name>${name}</name>
-    <desc>${desc}</desc>
-    <sym>Symbol-X-Large-Red</sym>
-    <extensions>
-      <opencpn:scale_min_max UseScale="True" ScaleMin="160000" ScaleMax="0"></opencpn:scale_min_max>
-    </extensions>
-  </wpt>
-`;
-  });
-
-  gpx += `</gpx>`;
-  return gpx;
-}
-
-// XML Escape Funktion
-function escapeXml(unsafe) {
-  if (!unsafe) return '';
-  return unsafe.toString()
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-// Berechne Distanz zwischen zwei Koordinaten in Metern (Haversine-Formel)
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Erdradius in Metern
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
-}
-
-// Berechne Gesamtdistanz einer Route
-function calculateRouteDistance(coordinates) {
-  let totalDistance = 0;
-  for (let i = 0; i < coordinates.length - 1; i++) {
-    const [lon1, lat1] = coordinates[i];
-    const [lon2, lat2] = coordinates[i + 1];
-    totalDistance += calculateDistance(lat1, lon1, lat2, lon2);
-  }
-  return Math.round(totalDistance);
-}
-
-// Formatiere Beschreibung für von/bis oder ab
-function formatBlockageDescription(blockages, languageIsGerman) {
-  return blockages.map(block => {
-    const startStr = formatDateTime(block.startDate);
-    const endStr = block.endDate ? formatDateTime(block.endDate) : null;
-
-    if (!endStr) {
-      return languageIsGerman ? `ab ${startStr}` : `from ${startStr}`;
-    }
-
-    const startDay = startStr.split(' ')[0];
-    const endDay = endStr.split(' ')[0];
-    const startTime = startStr.split(' ')[1];
-    const endTime = endStr.split(' ')[1];
-
-    if (startDay === endDay) {
-      return languageIsGerman 
-        ? `von ${startDay} ${startTime} bis ${endTime}`
-        : `from ${startDay} ${startTime} to ${endTime}`;
-    } else {
-      return languageIsGerman
-        ? `von ${startStr} bis ${endStr}`
-        : `from ${startStr} to ${endStr}`;
-    }
-  }).join(" | ");
-}
-
-// Verschiebe Punkt um X Meter nach Osten (rechts)
-function movePointEast(lat, lon, meters) {
-  // 1 Grad Longitude ≈ 111320 * cos(lat) Meter
-  const latRad = lat * Math.PI / 180;
-  const metersPerDegree = 111320 * Math.cos(latRad);
-  const deltaLon = meters / metersPerDegree;
-  return [lon + deltaLon, lat];
-}
-
-function toGeoJSON(messages, movePointMeters, languageIsGerman) {
+async function toGeoJSON(messages, movePointMeters, validUntilMs, languageIsGerman, app) {
   const locationGroups = {};
   const routes = [];
-  
+
+  // Schritt 1: Nachrichten verarbeiten und gruppieren
   for (const msg of messages || []) {
     if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
-    
-    const validPoints = msg.location.filter(p => 
+
+    const validPoints = msg.location.filter(p =>
       typeof p.lon === 'number' && typeof p.lat === 'number'
     );
-    
+
     if (validPoints.length === 0) continue;
-    
+
     // Wenn mehr als 1 Punkt: Route
     if (validPoints.length > 1) {
       const coordinates = validPoints.map(p => [p.lon, p.lat]);
@@ -268,11 +67,11 @@ function toGeoJSON(messages, movePointMeters, languageIsGerman) {
         startDate: msg.startDate,
         endDate: msg.endDate
       }], languageIsGerman);
-      
-      const routeName = languageIsGerman 
+
+      const routeName = languageIsGerman
         ? `Sperrung - ${msg.locationName || msg.title || 'Unbekannt'}`
         : `Closure - ${msg.locationName || msg.title || 'Unknown'}`;
-      
+
       routes.push({
         name: routeName,
         description: description,
@@ -284,59 +83,96 @@ function toGeoJSON(messages, movePointMeters, languageIsGerman) {
       });
       continue;
     }
-    
+
     // Einzelner Punkt: gruppieren
     const firstPoint = validPoints[0];
-    const lat = firstPoint.lat.toFixed(5);
-    const lon = firstPoint.lon.toFixed(5);
+    const lat = firstPoint.lat;
+    const lon = firstPoint.lon;
     const key = `${lat},${lon}`;
-    
+
     if (!locationGroups[key]) {
       locationGroups[key] = {
         lat: parseFloat(lat),
         lon: parseFloat(lon),
         locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
         fairway: msg.fairwayName,
-        blockages: []
+        status: msg.limitationCode,
+        ntsNumber: `${msg.ntsNumber.year}-${msg.ntsNumber.number}`,
+        organisation: msg.ntsNumber.organisation,
+        ntsType: msg.ntsType,
+        startDate: msg.startDate,
+        endDate: msg.endDate,
+        berichte: {}
       };
     }
-    
-    locationGroups[key].blockages.push({
-      startDate: msg.startDate,
-      endDate: msg.endDate,
-      id: msg.ntsSummaryId || msg.id
-    });
   }
-  
-  // Erstelle Features aus gruppierten Daten (Punkte)
+
+  // Schritt 2: Detail-Daten für Punkte abrufen
+  const groupKeys = Object.keys(locationGroups);
+  app.debug(`Processing ${groupKeys.length} location groups`);
+
+  for (let i = 0; i < groupKeys.length; i++) {
+    const key = groupKeys[i];
+    const group = locationGroups[key];
+    const detailUrl = `https://vaarweginformatie.nl/frp/api/messages/${String(group.ntsType).toLowerCase()}/${group.organisation}-${group.ntsNumber}`;
+    
+    try {
+      const resp = await axios.get(detailUrl, { 
+        headers: { Accept: "application/json" },
+        timeout: 10000 // 10 Sekunden Timeout
+      });
+      
+      const detailData = resp && resp.data ? resp.data : null;
+      
+      if (detailData) {
+        createGroupBlockages(group, detailData, validUntilMs, detailUrl, app, languageIsGerman);
+      } else {
+        app.debug(`No detail data for group ${i+1}/${groupKeys.length}`);
+      }
+    } catch (e) {
+      app.error(`Detail fetch failed for ${detailUrl}: ${e.message}`);
+      continue;
+    }
+  }
+
+  // Schritt 3: Features aus Punkten erstellen
   const features = [];
   for (const key in locationGroups) {
     const group = locationGroups[key];
-    const descriptions = formatBlockageDescription(group.blockages, languageIsGerman);
-
-    // Punkt nach rechts verschieben um Überlagerung zu vermeiden
-    const [shiftedLon, shiftedLat] = movePointEast(group.lat, group.lon, movePointMeters);
-
-    const feature = {
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [shiftedLon, shiftedLat]
-      },
-      properties: {
-        name: group.locationName,
-        description: descriptions,
-        fairway: group.fairway || undefined,
-        status: 'BLOCKED',
-        blockageCount: group.blockages.length,
-		blockages: group.blockages,
-        source: 'vaarweginformatie.nl'
-      }
-    };
     
-    features.push(feature);
+    try {
+      const description = formatDescription(group, app, languageIsGerman);
+
+      // WICHTIG: movePointEast gibt [lon, lat] zurück!
+      const [shiftedLat, shiftedLon] = movePointEast(group.lat, group.lon, movePointMeters);
+
+      const feature = {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [shiftedLon, shiftedLat]  // GeoJSON Format: [lon, lat]
+        },
+        properties: {
+          name: group.locationName,
+          description: description,
+          fairway: group.fairway,
+          limitationCode: group.status,
+          blockageCount: Object.values(group.berichte).reduce((sum, bericht) => sum + (bericht.blockages?.length || 0), 0),
+          berichte: group.berichte,
+          position: `https://www.google.com/maps?q=${group.lat.toFixed(5)},${group.lon.toFixed(5)}`,
+          source: 'vaarweginformatie.nl'
+        }
+      };
+
+      features.push(feature);
+    } catch (e) {
+      app.error(`Failed to create feature for ${key}: ${e.message}`);
+      // Weiter mit nächstem Feature
+      continue;
+    }
   }
-  
+
+  app.debug(`Created ${features.length} features and ${routes.length} routes`);
   return { points: features, routes: routes };
 }
 
@@ -345,7 +181,7 @@ module.exports = function(app) {
   let cachedResourceSet = null;
   let cachedRoutes = {};
   let pluginRouteIds = new Set();
-  let RESOURCESET_NAME = 'Sperrungen';
+  let RESOURCESET_NAME='';
   const RESOURCE_ID = 'blocked-waterways-nl';
 
   const plugin = {
@@ -355,9 +191,9 @@ module.exports = function(app) {
     schema: {
       type: 'object',
       properties: {
-        language: { 
-          type: 'boolean', 
-          title: 'Sprache: Deutsch (Language: German / Taal: Duits)', 
+        language: {
+          type: 'boolean',
+          title: 'Sprache: Deutsch (Language: German / Taal: Duits)',
           default: true,
           description: 'Wenn deaktiviert: Englisch (If disabled: English / Indien uitgeschakeld: Engels)'
         },
@@ -392,11 +228,9 @@ module.exports = function(app) {
     start: function(options) {
       // Speichere Optionen für späteren Zugriff
       plugin.lastOptions = options;
-      
-      // Sprache bestimmen
       const languageIsGerman = options.language !== false;
       RESOURCESET_NAME = languageIsGerman ? 'Sperrungen' : 'Closures';
-      
+
       const selectedIds = options["All areas"] ? [] : Object.keys(AREA_MAP)
         .filter((name) => options[name])
         .map((name) => AREA_MAP[name]);
@@ -417,8 +251,6 @@ module.exports = function(app) {
           app.debug(`Fetching data: ${url}`);
           const { data } = await axios.get(url, { headers: { Accept: 'application/json' } });
 
-          app.debug(`Raw API response type: ${typeof data}, isArray: ${Array.isArray(data)}`);
-          
           const messages = Array.isArray(data)
             ? data
             : Array.isArray(data.messages)
@@ -429,20 +261,21 @@ module.exports = function(app) {
 
           app.debug(`Found ${messages.length} messages in API response`);
 
-          const geoData = toGeoJSON(messages, movePointMeters, languageIsGerman);
+          const geoData = await toGeoJSON(messages, movePointMeters, validUntilMs, languageIsGerman, app);
 
-          app.debug(`GeoData: ${geoData.points.length} points, ${geoData.routes.length} routes`);
+          app.debug(`Messages transformed to ${geoData.points.length} objects and ${geoData.routes.length} routes`);
 
-          // Alte Daten löschen
-          cachedResourceSet = null;
+          // **NEU: Alte Routen explizit aus cachedRoutes löschen**
+          for (const routeId of pluginRouteIds) {
+            delete cachedRoutes[routeId];
+          }
           pluginRouteIds.clear();
-          cachedRoutes = {};
 
           // ResourceSet für Punkte erstellen und cachen
-          const resourceDescription = languageIsGerman 
+          const resourceDescription = languageIsGerman
             ? 'Gesperrte Wasserstraßen von vaarweginformatie.nl'
             : 'Blocked waterways from vaarweginformatie.nl';
-            
+
           cachedResourceSet = {
             type: 'ResourceSet',
             name: RESOURCESET_NAME,
@@ -458,10 +291,10 @@ module.exports = function(app) {
               features: geoData.points
             }
           };
-          
+
           // Routen cachen (für routes Provider)
           geoData.routes.forEach((route, index) => {
-            const routeId = `blocked-route-${index}-${Date.now()}`;
+            const routeId = `blocked-route-${index}`;  // **GEÄNDERT: Entferne Timestamp**
             pluginRouteIds.add(routeId);
             cachedRoutes[routeId] = {
               name: route.name,
@@ -479,8 +312,19 @@ module.exports = function(app) {
               }
             };
           });
-          
-          app.debug(`ResourceSet updated (${geoData.points.length} points, ${geoData.routes.length} routes)`);
+
+          app.debug(`ResourceSet updated for ${geoData.points.length} objects and ${geoData.routes.length} routes`);
+
+          // **NEU: SignalK über Änderungen benachrichtigen (wenn möglich)**
+          if (typeof app.handleMessage === 'function') {
+            app.handleMessage('resources', {
+              updates: [{
+                source: { label: plugin.id },
+                timestamp: new Date().toISOString(),
+                values: [{ path: 'resources.update', value: Date.now() }]
+              }]
+            });
+          }
 
           // Optional: OpenCPN GPX Dateien schreiben
           if (options.openCpnGeoJsonPathRoutes && geoData.routes.length > 0) {
@@ -488,14 +332,14 @@ module.exports = function(app) {
             fs.writeFileSync(options.openCpnGeoJsonPathRoutes, routesGPX, 'utf8');
             app.debug(`Routes GPX file written: ${options.openCpnGeoJsonPathRoutes}`);
           }
-          
+
           if (options.openCpnGeoJsonPathWaypoints && geoData.points.length > 0) {
             const waypointsGPX = generateWaypointsGPX(geoData.points, languageIsGerman);
             fs.writeFileSync(options.openCpnGeoJsonPathWaypoints, waypointsGPX, 'utf8');
-            app.debug(`Waypoints GPX file written: ${options.openCpnGeoJsonPathWaypoints}`);
+            app.debug(`Objects/waypoints GPX file written: ${options.openCpnGeoJsonPathWaypoints}`);
           }
         } catch (err) {
-          app.error(`Fetch error: ${err.message}`);
+          if (app && typeof app.error === 'function') app.error(`Fetch error: ${err.message}`);
         }
       };
 
@@ -542,7 +386,7 @@ module.exports = function(app) {
           }
         }
       };
-      
+
       // Resource Provider für Routes (Linien) registrieren
       const routeProvider = {
         type: 'routes',
@@ -586,9 +430,9 @@ module.exports = function(app) {
       try {
         app.registerResourceProvider(sperrungProvider);
         app.registerResourceProvider(routeProvider);
-        app.debug('Resource providers registered');
+        if (app && typeof app.debug === 'function') app.debug('Resource providers registered');
       } catch (error) {
-        app.error(`Failed to register resource providers: ${error.message}`);
+        if (app && typeof app.error === 'function') app.error(`Failed to register resource providers: ${error.message}`);
         return;
       }
 
@@ -622,7 +466,7 @@ module.exports = function(app) {
         if (!newConfig) {
           return res.status(400).json({ error: 'No configuration provided' });
         }
-        
+
         // Speichere Konfiguration
         plugin.lastOptions = newConfig;
         app.savePluginOptions(newConfig, (err) => {
@@ -636,7 +480,7 @@ module.exports = function(app) {
       // Restart endpoint - startet Plugin neu
       router.post('/restart', (req, res) => {
         res.json({ message: 'Plugin restarting...' });
-        
+
         // Plugin stoppen und neu starten
         setTimeout(() => {
           plugin.stop();

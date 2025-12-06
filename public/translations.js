@@ -49,8 +49,11 @@ const translations = {
     mapUpdateLabel: "Aktualisiert:",
     mapClosureAll: "Alle Sperrungen",
     mapClosureToday: "Nur heute",
-	mapClosureStart: "von",
-	mapClosureEnd: "bis",
+	  mapClosureStart: "von",
+	  mapClosureEnd: "bis",
+    searchLabel: 'Suche:',
+    searchPlaceholder: 'Name der Sperrung...',
+    searchNoResults: 'Keine Ergebnisse',
     unsavedChanges: "Bitte Konfiguration speichern"
   },
   en: {
@@ -103,8 +106,11 @@ const translations = {
     mapUpdateLabel: "Updated:",
     mapClosureAll: "All closures",
     mapClosureToday: "Only today's",
-	mapClosureStart: "from",
-	mapClosureEnd: "until",
+	  mapClosureStart: "from",
+	  mapClosureEnd: "until",
+    searchLabel: 'Search:',
+    searchPlaceholder: 'Closure name...',
+    searchNoResults: 'No results',
     unsavedChanges: "Please save configuration"
   }
 };

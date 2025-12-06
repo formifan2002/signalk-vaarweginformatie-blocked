@@ -2,13 +2,15 @@
 node_modules/
 
 # Build outputs (Webpack)
-public/
+public/*
+!public/
 !public/index.html
 !public/icon.png
 !public/translations.js
 !public/style.css
 !public/date-range-component.js
 !public/api-bridge.js
+
 dist/
 build/
 

@@ -52,6 +52,36 @@ const limitationLabels = {
   PRECIP:   { de: "Niederschlag", en: "precipitation" }
 };
 
+const intervalMap = {
+  CON: { en: "continuous", de: "durchgehend" },
+  DAY: { en: "daily", de: "täglich" },
+  SUN: { en: "Sunday", de: "Sonntag" },
+  MON: { en: "Monday", de: "Montag" },
+  TUE: { en: "Tuesday", de: "Dienstag" },
+  WED: { en: "Wednesday", de: "Mittwoch" },
+  THU: { en: "Thursday", de: "Donnerstag" },
+  FRI: { en: "Friday", de: "Freitag" },
+  SAT: { en: "Saturday", de: "Samstag" },
+  WRK: { en: "Monday to Friday", de: "Montag bis Freitag" },
+  WKN: { en: "Saturday and Sunday", de: "Samstag und Sonntag" },
+  DTI: { en: "day-time", de: "bei Tag" },
+  NTI: { en: "night-time", de: "bei Nacht" },
+  RVI: { en: "in case of restricted visibility", de: "bei beschränkten Sichtverhältnissen" },
+  EXC: { en: "with the exception of", de: "mit Ausnahme von" },
+  WRD: { en: "Monday to Friday except public holidays", de: "Montag bis Freitag ausgenommen Feiertage" }
+};
+
+const intervalExcludeMap = {
+  SUN: { en: "Sunday", de: "Sonntag" },
+  MON: { en: "Monday", de: "Montag" },
+  TUE: { en: "Tuesday", de: "Dienstag" },
+  WED: { en: "Wednesday", de: "Mittwoch" },
+  THU: { en: "Thursday", de: "Donnerstag" },
+  FRI: { en: "Friday", de: "Freitag" },
+  SAT: { en: "Saturday", de: "Samstag" },
+  WRK: { en: "Monday to Friday", de: "Montag bis Freitag" },
+  WKN: { en: "Saturday and Sunday", de: "Samstag und Sonntag" },
+};
 
 const targetGroupMap = {
    PLE: { de: "Freizeitschifffahrt", en: "Pleasure craft" },
@@ -221,19 +251,29 @@ function formatDateISO(dateString) {
 function formatTargetGroup(tg, lat, lon, detailUrl, app, languageIsGerman) {
   if (!tg || !tg.targetGroupCode) return '';
   let text = '';
+
   if (targetGroupMap[tg.targetGroupCode]) {
     text = languageIsGerman
       ? targetGroupMap[tg.targetGroupCode].de
       : targetGroupMap[tg.targetGroupCode].en;
   } else {
     text = tg.targetGroupCode + (languageIsGerman ? " - UNBEKANNT" : " - UNKNOWN");
+
+    // Koordinaten nur ausgeben, wenn beide Werte vorhanden und numerisch sind
+    let coordsText = "";
+    if (lat !== null && lon !== null && typeof lat === "number" && typeof lon === "number") {
+      coordsText = languageIsGerman
+        ? `, Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+        : `, Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    }
+
     if (languageIsGerman) {
       app.debug(
-        `Unbekannter targetGroupCode: ${tg.targetGroupCode}, Koordinaten: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+        `Unbekannter targetGroupCode: ${tg.targetGroupCode}${coordsText} URL: ${detailUrl}`
       );
     } else {
       app.debug(
-        `Unknown targetGroupCode: ${tg.targetGroupCode}, Coordinates: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+        `Unknown targetGroupCode: ${tg.targetGroupCode}${coordsText} URL: ${detailUrl}`
       );
     }
   }
@@ -279,13 +319,21 @@ function getLimitationCode(codeText, limitationCode, lat, lon, detailUrl, app, l
     } else {
       type = limitationCode + " - " + (languageIsGerman ? "UNBEKANNT" : "UNKNOWN");
 
+      // Koordinaten nur ausgeben, wenn beide Werte vorhanden sind
+      let coordsText = "";
+      if (lat !== null && lon !== null && typeof lat === "number" && typeof lon === "number") {
+        coordsText = languageIsGerman
+          ? `, Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+          : `, Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      }
+
       if (languageIsGerman) {
         app.debug(
-          `Unbekannter ${codeText}: ${limitationCode}, Koordinaten: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+          `Unbekannter ${codeText}: ${limitationCode}${coordsText} URL: ${detailUrl}`
         );
       } else {
         app.debug(
-          `Unknown ${codeText}: ${limitationCode}, Coordinates: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+          `Unknown ${codeText}: ${limitationCode}${coordsText} URL: ${detailUrl}`
         );
       }
     }
@@ -293,6 +341,40 @@ function getLimitationCode(codeText, limitationCode, lat, lon, detailUrl, app, l
   return type;
 }
 
+function getIntervalCode(codeText, intervalCode, lat, lon, detailUrl, app, languageIsGerman) {
+  const lang = languageIsGerman ? 'de' : 'en';
+  let type = "";
+
+  if (intervalCode) {
+    if (intervalMap[intervalCode]) {
+      // Sprache auswählen: "de" oder "en"
+      if (!intervalExcludeMap[intervalCode]) {
+        type = intervalMap[intervalCode][lang];
+      }
+    } else {
+      type = intervalCode + " - " + (languageIsGerman ? "UNBEKANNT" : "UNKNOWN");
+
+      // Koordinaten nur ausgeben, wenn beide Werte vorhanden sind
+      let coordsText = "";
+      if (lat !== null && lon !== null && typeof lat === "number" && typeof lon === "number") {
+        coordsText = languageIsGerman
+          ? `, Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+          : `, Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      }
+
+      if (languageIsGerman) {
+        app.debug(
+          `Unbekannter ${codeText}: ${intervalCode}${coordsText} URL: ${detailUrl}`
+        );
+      } else {
+        app.debug(
+          `Unknown ${codeText}: ${intervalCode}${coordsText} URL: ${detailUrl}`
+        );
+      }
+    }
+  }
+  return type;
+}
 
 function clampDays(days) {
   const n = Number(days);
@@ -332,39 +414,97 @@ function formatCommunications(communications, languageIsGerman = true) {
   return `${label}: ${parts.join(", ")}`;
 }
 
-function createGroupBlockages(locationGroup,details, validUntilMs, detailUrl,app,languageIsGerman) {
- const lat=locationGroup.lat;
- const lon=locationGroup.lon;
- const bericht=`${details.ntsNumber.year},${details.ntsNumber.number}`;
- const allLimitations = [];
+function findMatches(obj, app, detailUrl) {
+  for (const [key, value] of Object.entries(obj)) {
+    // Key enthält "interval"
+    if (key.toLowerCase().includes("interval")) {
+      app.debug(`Gefunden: key="${key}" in ${detailUrl}`);
+    }
+
+    // Wert ist "DAY" oder "CON"
+    if (value === "DAY" || value === "CON") {
+      app.debug(`Gefunden: key="${key}", value="${value}" in ${detailUrl}`);
+    }
+
+    // Wenn der Wert selbst ein Objekt ist → rekursiv weiter suchen
+    if (value && typeof value === "object") {
+      findMatches(value, app, detailUrl);
+    }
+  }
+}
+
+function createGroupBlockages(locationGroup, details, validUntilMs, detailUrl, app, languageIsGerman) {
+  const lat = locationGroup.lat;
+  const lon = locationGroup.lon;
+  const bericht = `${details.ntsNumber.year},${details.ntsNumber.number}`;
+  const allLimitations = [];
+
+findMatches(details, app,  detailUrl);
+
+
+  // Hilfsfunktion: aus UTC-Mitternacht + Zeitanteil → lokale Mitternacht + ms seit Mitternacht
+  const normalizePeriod = (dateTs, timeMs) => {
+    // Basis: UTC-Mitternacht
+    const utcMidnight = new Date(dateTs);
+    utcMidnight.setUTCHours(0, 0, 0, 0);
+
+    // Absoluter Zeitpunkt = UTC-Mitternacht + Zeitanteil
+    const abs = utcMidnight.getTime() + (timeMs ?? 0);
+
+    // Lokale Mitternacht
+    const localMidnight = new Date(abs);
+    localMidnight.setHours(0, 0, 0, 0);
+
+    return {
+      dateMs: localMidnight.getTime(),
+      timeMs: abs - localMidnight.getTime(),
+      absTime: abs
+    };
+  };
+
   if (details && Array.isArray(details.subjectLimitations)) {
     details.subjectLimitations.forEach(subject => {
-      if (Array.isArray(subject.limitations) && subject.geoObject.coordinates[0].lat === lat && subject.geoObject.coordinates[0].lon === lon) {
+      if (
+        Array.isArray(subject.limitations) &&
+        subject.geoObject?.coordinates?.[0]?.lat === lat &&
+        subject.geoObject?.coordinates?.[0]?.lon === lon
+      ) {
         subject.limitations.forEach(lim => {
           if (Array.isArray(lim.limitationPeriods)) {
             lim.limitationPeriods.forEach(period => {
-              const startDate = period.startDate ?? 0;
-              const startTime = period.startTimeMs ?? 0;
-              const startTs   = startDate + startTime;
+              const rawStartDate = period.startDate ?? 0;
+              const rawEndDate   = period.endDate   ?? 0;
+              const startTimeMs  = period.startTimeMs ?? 0;
+              const endTimeMs    = period.endTimeMs   ?? 0;
 
-              const endDate = period.endDate ?? 0;
-              const endTime = period.endTimeMs ?? 0;
-              const endTs   = endDate + endTime;
+              // Start/End normalisieren
+              const startNorm = normalizePeriod(rawStartDate, startTimeMs);
+              const endNorm   = normalizePeriod(rawEndDate,   endTimeMs);
 
-              // "now" = 0:00 Uhr des heutigen Tages
+              // Grenzen: heutige lokale Mitternacht
               const nowDate = new Date();
               nowDate.setHours(0, 0, 0, 0);
               const nowMs = nowDate.getTime();
 
-              // Bedingungen:
-              const startValid = startTs >= nowMs && startTs <= validUntilMs;
-              const endValid   = endTs   >= nowMs && endTs   <= validUntilMs;
-
-              // Intervall-Überschneidung: [startTs, endTs] schneidet [nowMs, validUntilMs]
-              const overlaps   = startTs <= validUntilMs && endTs >= nowMs;
+              const startValid = startNorm.absTime >= nowMs && startNorm.absTime <= validUntilMs;
+              const endValid   = endNorm.absTime   >= nowMs && endNorm.absTime   <= validUntilMs;
+              const overlaps   = startNorm.absTime <= validUntilMs && endNorm.absTime >= nowMs;
 
               if (startValid || endValid || overlaps) {
-                allLimitations.push({ lim, period, subject });
+               const pushPeriod={
+                    startDate: startNorm.dateMs,     // lokale Mitternacht
+                    startTimeMs: startNorm.timeMs,   // ms seit lokaler Mitternacht
+                    endDate: endNorm.dateMs,
+                    endTimeMs: endNorm.timeMs
+                  }
+                if (period.interval){
+                  pushPeriod.interval = period.interval;
+                }
+                allLimitations.push({
+                  lim,
+                  period: pushPeriod,
+                  subject
+                });
               }
             });
           }
@@ -372,7 +512,8 @@ function createGroupBlockages(locationGroup,details, validUntilMs, detailUrl,app
       }
     });
   }
-  // Sortierung nach startDate + startTimeMs
+
+  // Sortierung nach lokalem Start
   allLimitations.sort((a, b) => {
     const aKey = (a.period.startDate || 0) + (a.period.startTimeMs || 0);
     const bKey = (b.period.startDate || 0) + (b.period.startTimeMs || 0);
@@ -380,28 +521,45 @@ function createGroupBlockages(locationGroup,details, validUntilMs, detailUrl,app
   });
 
   allLimitations.forEach(record => {
-      if (!locationGroup.berichte[bericht]) {
-        locationGroup.berichte[bericht] = {
-          bericht: bericht.replace(',', '-'),
-          reasonCode: getLimitationCode('reasonCode', details.reasonCode, lat, lon, detailUrl, app,languageIsGerman),
-          subjectCode: details.subjectCode,
-          detailUrl: detailUrl,
-          communication: formatCommunications(details.communications, languageIsGerman),
-          blockages: []
-        };
-      }
-      locationGroup.berichte[bericht].blockages.push({
-          startDate: record.period.startDate,
-          startTimeMs: record.period.startTimeMs,
-          endDate: record.period.endDate,
-          endTimeMs: record.period.endTimeMs,
-          status: record.lim.limitationCode,
-          targetGroups: record.lim.targetGroups,
-          indicationCode: record.lim.indicationCode,
-          unit: record.lim.unit,
-          value: record.lim.value,
-          referenceCode: record.lim.referenceCode
-    });
+    if (!locationGroup.berichte[bericht]) {
+      locationGroup.berichte[bericht] = {
+        bericht: bericht.replace(',', '-'),
+        reasonCode: getLimitationCode('reasonCode', details.reasonCode, lat, lon, detailUrl, app, languageIsGerman),
+        subjectCode: details.subjectCode,
+        detailUrl: detailUrl,
+        communication: formatCommunications(details.communications, languageIsGerman),
+        blockages: []
+      };
+    }
+    const blockage = {
+      startDate: record.period.startDate,
+      startTimeMs: record.period.startTimeMs,
+      endDate: record.period.endDate,
+      endTimeMs: record.period.endTimeMs,
+      status: record.lim.limitationCode
+    };
+    if (record.lim.indicationCode){
+      blockage.indicationCode = record.lim.indicationCode;
+    }
+    if (record.lim.unit){
+      blockage.unit = record.lim.unit;
+    }
+    if (record.lim.value){
+      blockage.value = record.lim.value;
+    }
+    if (record.lim.referenceCode){
+      blockage.referenceCode = record.lim.referenceCode;
+    }
+    if (record.lim.indicationCode){
+      blockage.indicationCode = record.lim.indicationCode;
+    }
+    if (record.lim.targetGroups && record.lim.targetGroups.length > 0){
+      blockage.targetGroups = record.lim.targetGroups;
+    }
+    if (record.period.interval) {
+      blockage.interval = record.period.interval;
+    }
+    locationGroup.berichte[bericht].blockages.push(blockage);
   });
 }
 
@@ -433,23 +591,43 @@ function formatIndicationCode(indicationCode, lat, lon, detailUrl, app, language
     return languageIsGerman ? entry.de : entry.en;
   } else {
     const fallback = languageIsGerman ? "UNBEKANNT" : "UNKNOWN";
+
+    // Koordinaten nur ausgeben, wenn beide Werte vorhanden und numerisch sind
+    let coordsText = "";
+    if (lat !== null && lon !== null && typeof lat === "number" && typeof lon === "number") {
+      coordsText = languageIsGerman
+        ? `, Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+        : `, Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    }
+
     if (languageIsGerman) {
       app.debug(
-        `Unbekannter indicationCode: ${indicationCode}, Koordinaten: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+        `Unbekannter indicationCode: ${indicationCode}${coordsText} URL: ${detailUrl}`
       );
     } else {
       app.debug(
-        `Unknown indicationCode: ${indicationCode}, Coordinates: ${lat?.toFixed?.(5) || 'n/a'}, ${lon?.toFixed?.(5) || 'n/a'} URL: ${detailUrl}`
+        `Unknown indicationCode: ${indicationCode}${coordsText} URL: ${detailUrl}`
       );
     }
+
     return indicationCode + " - " + fallback;
   }
 }
 
 function formatDescription(locationGroup, app, languageIsGerman) {
-  const lat = locationGroup.lat;
-  const lon = locationGroup.lon;
+  const lat = locationGroup.lat ?? null;
+  const lon = locationGroup.lon ?? null;
   const berichtValues = Object.values(locationGroup.berichte);
+
+  // Dauer (Millis seit Mitternacht) zu "HH:MM" ohne Zeitzonenverschiebung
+  const msToTime = ms => {
+    if (ms === undefined || ms === null || !Number.isFinite(ms)) return '';
+    const totalMinutes = Math.floor(ms / 60000);
+    const hh = Math.floor(totalMinutes / 60);
+    const mm = totalMinutes % 60;
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    return `${pad(hh)}:${pad(mm)}`;
+  };
 
   const texts = berichtValues.map((berichtGroup, bIndex) => {
     let berichtHeader = `${berichtGroup.bericht} - ${berichtGroup.reasonCode}: `;
@@ -459,7 +637,7 @@ function formatDescription(locationGroup, app, languageIsGerman) {
       const endDateObj   = blockage.endDate   ? new Date(blockage.endDate)   : null;
       const locale = languageIsGerman ? "de-DE" : "en-US";
 
-      // Wochentag und Datum getrennt formatieren
+      // Wochentag und Datum getrennt (lokal) formatieren
       const weekdayOpts = { weekday: "long" };
       const dateOpts    = { day: "2-digit", month: "2-digit", year: "2-digit" };
 
@@ -471,13 +649,7 @@ function formatDescription(locationGroup, app, languageIsGerman) {
         ? `${endDateObj.toLocaleDateString(locale, weekdayOpts)} ${endDateObj.toLocaleDateString(locale, dateOpts)}`
         : '';
 
-      const msToTime = ms => {
-        if (ms === undefined || ms === null) return '';
-        const d = new Date(ms);
-        if (!isFinite(d)) return '';
-        return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-      };
-
+      // Zeiten aus Millis seit Mitternacht (keine Date-Objekte!)
       const startTime = msToTime(blockage.startTimeMs);
       const endTime   = blockage.endTimeMs !== undefined ? msToTime(blockage.endTimeMs) : "";
 
@@ -511,6 +683,8 @@ function formatDescription(locationGroup, app, languageIsGerman) {
 
       const extra = extraParts.length ? ` (${extraParts.join(" ")})` : "";
 
+      const interval=getIntervalCode('interval', blockage.interval, lat, lon, blockage.detailUrl, app, languageIsGerman);
+
       const hasEndDate = endDateObj !== null;
       const sameDay =
         startDateObj && endDateObj &&
@@ -519,20 +693,24 @@ function formatDescription(locationGroup, app, languageIsGerman) {
         startDateObj.getFullYear() === endDateObj.getFullYear();
 
       let text = "";
+      const intervalPrefix = interval ? interval + " " : "";
       if (!hasEndDate) {
-        text = `${type}${tgText ? " " + tgText : ""} ab ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
+        text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ab ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
       } else if (sameDay) {
-        text = `${type}${tgText ? " " + tgText : ""} ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
+        text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
       } else {
-        // mehrere Tage: Datumsspanne + Zeitspanne am Ende
-        const dateRange = `${dateStr} – ${endDateStr}`;
-        let timeRange = "";
-        if (startTime || endTime) {
-          timeRange = ` ${startTime}${endTime ? "-" + endTime : ""}`;
+        if (interval === "DAY") {
+          const dateRange = `${dateStr} – ${endDateStr}`;
+          let timeRange = "";
+          if (startTime || endTime) {
+            timeRange = ` ${startTime}${endTime ? "-" + endTime : ""}`;
+          }
+          text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateRange}${timeRange}${extra}`;
+        } else {
+          // explizite Ausgabe mit Startdatum+Startzeit und Enddatum+Endzeit
+          text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateStr}${startTime ? " " + startTime : ""} - ${endDateStr}${endTime ? " " + endTime : ""}${extra}`;
         }
-        text = `${type}${tgText ? " " + tgText : ""} ${dateRange}${timeRange}${extra}`;
       }
-
       return text.trim();
     }).join(", ");
 

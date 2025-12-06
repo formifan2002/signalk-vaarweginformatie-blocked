@@ -50,61 +50,148 @@ async function toGeoJSON(messages, movePointMeters, validUntilMs, languageIsGerm
   const routes = [];
 
   // Schritt 1: Nachrichten verarbeiten und gruppieren
-  for (const msg of messages || []) {
-    if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
+for (const msg of messages || []) {
+  if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
 
-    const validPoints = msg.location.filter(p =>
-      typeof p.lon === 'number' && typeof p.lat === 'number'
+  const validPoints = msg.location.filter(p =>
+    typeof p.lon === 'number' && typeof p.lat === 'number'
+  );
+
+  if (validPoints.length === 0) continue;
+
+  // Wenn mehr als 1 Punkt: Route
+  if (validPoints.length > 1) {
+    const coordinates = validPoints.map(p => [p.lon, p.lat]);
+    const distance = calculateRouteDistance(coordinates);
+    const berichtKey = `${msg.ntsNumber.year}-${msg.ntsNumber.number}`;
+
+    // Route mit denselben Koordinaten suchen
+    let existingRoute = routes.find(r =>
+      r.coordinates.length === coordinates.length &&
+      r.coordinates.every((c, i) =>
+        c[0] === coordinates[i][0] && c[1] === coordinates[i][1]
+      )
     );
 
-    if (validPoints.length === 0) continue;
-
-    // Wenn mehr als 1 Punkt: Route
-    if (validPoints.length > 1) {
-      const coordinates = validPoints.map(p => [p.lon, p.lat]);
-      const distance = calculateRouteDistance(coordinates);
-      const description = formatBlockageDescription([{
-        startDate: msg.startDate,
-        endDate: msg.endDate
-      }], languageIsGerman);
-
-      const routeName = languageIsGerman
-        ? `Sperrung - ${msg.locationName || msg.title || 'Unbekannt'}`
-        : `Closure - ${msg.locationName || msg.title || 'Unknown'}`;
-
-      routes.push({
-        name: routeName,
-        description: description,
+    if (!existingRoute) {
+      existingRoute = {
+        name: msg.locationName,
         distance: distance,
         coordinates: coordinates,
         fairway: msg.fairwayName,
-        startDate: msg.startDate,
-        endDate: msg.endDate
-      });
-      continue;
-    }
-
-    // Einzelner Punkt: gruppieren
-    const firstPoint = validPoints[0];
-    const lat = firstPoint.lat;
-    const lon = firstPoint.lon;
-    const key = `${lat},${lon}`;
-
-    if (!locationGroups[key]) {
-      locationGroups[key] = {
-        lat: parseFloat(lat),
-        lon: parseFloat(lon),
-        locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
-        fairway: msg.fairwayName,
-        status: msg.limitationCode,
-        ntsNumber: `${msg.ntsNumber.year}-${msg.ntsNumber.number}`,
-        organisation: msg.ntsNumber.organisation,
-        ntsType: msg.ntsType,
-        startDate: msg.startDate,
-        endDate: msg.endDate,
+        startDate: msg.startDate,   // initial setzen
+        endDate: msg.endDate,       // initial setzen
         berichte: {}
       };
+      routes.push(existingRoute);
+    } else {
+      // Start/End-Datum aktualisieren
+      if (existingRoute.startDate > msg.startDate) {
+        existingRoute.startDate = msg.startDate;
+      }
+      if (existingRoute.endDate < msg.endDate) {
+        existingRoute.endDate = msg.endDate;
+      }
     }
+
+    // Bericht-Eintrag suchen oder neu anlegen
+    if (!existingRoute.berichte[berichtKey]) {
+      const detailUrl = `https://vaarweginformatie.nl/frp/api/messages/${String(msg.ntsType).toLowerCase()}/${msg.ntsNumber.organisation}-${berichtKey}`;
+      existingRoute.berichte[berichtKey] = {
+        bericht: berichtKey,
+        detailUrl: detailUrl,
+        reasonCode: getLimitationCode('limitationCode',msg.limitationCode,null,null,detailUrl,app,languageIsGerman),
+        blockages: []
+      };
+    }
+
+    const start = new Date(msg.startDate);
+    const end   = new Date(msg.endDate);
+    const startMidnight = new Date(start);
+    startMidnight.setHours(0, 0, 0, 0);
+    const endMidnight = new Date(end);
+    endMidnight.setHours(0, 0, 0, 0);
+    // Millisekunden seit Mitternacht
+    const startTimeMs = start.getTime() - startMidnight.getTime();
+    const endTimeMs   = end.getTime() - endMidnight.getTime();
+    // Blockage hinzufügen
+    existingRoute.berichte[berichtKey].blockages.push({
+      startDate: startMidnight.getTime(), // Mitternacht als Timestamp
+      endDate: endMidnight.getTime(),     // Mitternacht als Timestamp
+      startTimeMs: startTimeMs,
+      endTimeMs: endTimeMs
+    });
+    continue;
+  }
+
+  // Einzelner Punkt: gruppieren
+  const firstPoint = validPoints[0];
+  const lat = firstPoint.lat;
+  const lon = firstPoint.lon;
+  const key = `${lat},${lon}`;
+
+  if (!locationGroups[key]) {
+    locationGroups[key] = {
+      lat: parseFloat(lat),
+      lon: parseFloat(lon),
+      locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
+      fairway: msg.fairwayName,
+      status: msg.limitationCode,
+      ntsNumber: `${msg.ntsNumber.year}-${msg.ntsNumber.number}`,
+      organisation: msg.ntsNumber.organisation,
+      ntsType: msg.ntsType,
+      startDate: msg.startDate,
+      endDate: msg.endDate,
+      berichte: {}
+    };
+  }
+}
+
+  // Routes sortiern und überschneidende Tage zusammenfassen
+  for (const route of routes) {
+      for (const berichtKey of Object.keys(route.berichte)) {
+        const bericht = route.berichte[berichtKey];
+
+        if (Array.isArray(bericht.blockages) && bericht.blockages.length > 0) {
+          // 1. Nach Startzeitpunkt (Datum + Zeitanteil) sortieren
+          bericht.blockages.sort((a, b) => 
+            (a.startDate + (a.startTimeMs || 0)) - (b.startDate + (b.startTimeMs || 0))
+          );
+
+          // 2. Zusammenfassen, wenn nahtlos
+          const merged = [];
+          let current = { ...bericht.blockages[0] };
+
+          for (let i = 1; i < bericht.blockages.length; i++) {
+            const next = bericht.blockages[i];
+
+            const currentEnd = current.endDate + (current.endTimeMs || 0);
+            const nextStart  = next.startDate   + (next.startTimeMs || 0);
+
+            // "nahtlos" = Ende der aktuellen Blockage entspricht dem Start der nächsten
+            if (currentEnd >= nextStart) {
+              // Endzeit ggf. erweitern
+              const nextEnd = next.endDate + (next.endTimeMs || 0);
+              if (nextEnd > currentEnd) {
+                current.endDate   = next.endDate;
+                current.endTimeMs = next.endTimeMs;
+              }
+            } else {
+              merged.push(current);
+              current = { ...next };
+            }
+          }
+          merged.push(current);
+
+          bericht.blockages = merged;
+        }
+      }
+  }
+
+  // Beschreibungen für Routes erzeugen
+  for (const route of routes) {
+      const description = formatDescription(route, app, languageIsGerman);
+      route.description = description; 
   }
 
   // Schritt 2: Detail-Daten für Punkte abrufen

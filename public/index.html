@@ -800,59 +800,93 @@
 	  }
 	}
 
-  function descriptionToHtml(description, communication, currentLang = 'de') {
-    if (!description || typeof description !== 'string') return '';
+  function descriptionToHtml(description, communication, berichte, currentLang = 'de') {
+  if (!description || typeof description !== 'string') return '';
 
-    // Beschreibung in einzelne Berichte aufteilen (Separator: " #")
-    const reports = description
-      .split(' #')
-      .map(s => s.trim())
-      .filter(Boolean);
+  const reports = description
+    .split(' #')
+    .map(s => s.trim())
+    .filter(Boolean);
 
-    let html = '';
+  let html = '';
 
-    reports.forEach(rep => {
-      // Header und Blockages trennen: erstes ":" ist die Trennstelle
-      const colonIdx = rep.indexOf(':');
-      if (colonIdx === -1) {
-        // Fallback: kein ":" gefunden → alles als ein Bullet unter einem generischen Header
-        const labelGeneric = currentLang === 'de' ? 'Bericht' : 'Report';
-        html += `<br><strong>${labelGeneric}</strong><ul><li>${escapeHtml(rep)}</li></ul>`;
-        return;
-      }
+  reports.forEach(rep => {
+    const colonIdx = rep.indexOf(':');
+    if (colonIdx === -1) {
+      const labelGeneric = currentLang === 'de' ? 'Bericht' : 'Report';
+      html += `<br><strong>${labelGeneric}</strong><ul><li>${escapeHtml(rep)}</li></ul>`;
+      return;
+    }
 
-      const header = rep.slice(0, colonIdx).trim();      // "Bericht - reasonCode"
-      const body   = rep.slice(colonIdx + 1).trim();     // "blockage1, blockage2, ..."
+    const header = rep.slice(0, colonIdx).trim();
+    const body   = rep.slice(colonIdx + 1).trim();
 
-      // Blockages durch "," getrennt
-      const items = body
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
+    // Standard: Header plain
+    let headerHtml = escapeHtml(header);
 
-      html += `<br><strong>${escapeHtml(header)}</strong><ul>`;
-      items.forEach(item => {
-        html += `<li>${escapeHtml(item)}</li>`;
+    // passenden Bericht suchen
+    if (berichte && typeof berichte === 'object') {
+      const found = Object.values(berichte).find(b => {
+        if (!b || typeof b.bericht !== 'string' || !b.bericht.length) return false;
+        const left = header.slice(0, b.bericht.length);
+        return left === b.bericht;
       });
-      html += `</ul>`;
-    });
 
-    // Communication anhängen, falls vorhanden
-    if (communication && typeof communication === 'string' && communication.trim()) {
-      const colonIdx = communication.indexOf(':');
-      if (colonIdx !== -1) {
-        // Teil vor dem ":" als fette Überschrift
-        const header = communication.slice(0, colonIdx + 1).trim();  // inkl. ":"
-        const body = communication.slice(colonIdx + 1).trim();
-        html += `<br><strong>${escapeHtml(header)}</strong><br>${escapeHtml(body)}`;
-      } else {
-        // Kein ":" gefunden → gesamten Text normal anzeigen
-        html += `<br>${escapeHtml(communication)}`;
+      if (found && typeof found.detailUrl === 'string' && found.detailUrl) {
+        const url = transformDetailUrl(found.detailUrl);
+        if (url) {
+          // gesamten Header als Link ausgeben
+          headerHtml = `<a href="${escapeHtml(url)}" target="_blank">${escapeHtml(header)}</a>`;
+        }
       }
     }
 
-    return html;
+    // Blockages durch "," getrennt
+    const items = body
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    html += `<br><strong>${headerHtml}</strong><ul>`;
+    items.forEach(item => {
+      html += `<li>${escapeHtml(item)}</li>`;
+    });
+    html += `</ul>`;
+  });
+
+  // Communication anhängen, falls vorhanden
+  if (communication && typeof communication === 'string' && communication.trim()) {
+    const colonIdx = communication.indexOf(':');
+    if (colonIdx !== -1) {
+      const header = communication.slice(0, colonIdx + 1).trim();
+      const body = communication.slice(colonIdx + 1).trim();
+      html += `<br><strong>${escapeHtml(header)}</strong><br>${escapeHtml(body)}`;
+    } else {
+      html += `<br>${escapeHtml(communication)}`;
+    }
   }
+
+  return html;
+}
+
+// Hilfsfunktion: Detail-URL transformieren
+function transformDetailUrl(original) {
+  const apiPrefix = "https://vaarweginformatie.nl/frp/api/messages/";
+  const mainPrefix = "https://vaarweginformatie.nl/frp/main/#/nts/";
+
+  if (!original.startsWith(apiPrefix)) return original;
+
+  const rest = original.slice(apiPrefix.length);
+  const firstSlash = rest.indexOf("/");
+  if (firstSlash === -1) return original;
+
+  const partToUpper = rest.slice(0, firstSlash).toUpperCase();
+  const remainder   = rest.slice(firstSlash);
+
+  return mainPrefix + partToUpper + remainder;
+}
+
+  
   // Einfache HTML-Escaping-Funktion
   function escapeHtml(str) {
     return String(str)
@@ -872,28 +906,29 @@
 		Object.entries(data.waterways).forEach(([key, entry]) => {
 		  // Nur Keys, die mit "blocked-route-" anfangen
 		  if (key.startsWith('blocked-route-')) {
-			const feature = entry.feature;
-			if (feature?.geometry?.type === 'LineString' || feature?.geometry?.type === 'MultiLineString') {
-			  L.geoJSON(feature, {
-				style: { color: initialConfig.colorHex || '#ff6b6b', weight: 3, opacity: 0.8 },
-				onEachFeature: (f, l) => {
-				  const name = entry.name || f.properties?.name;
-				  const description = entry.description || f.properties?.description;
+      const feature = entry.feature;
+      if (feature?.geometry?.type === 'LineString' || feature?.geometry?.type === 'MultiLineString') {
+        L.geoJSON(feature, {
+          style: { color: initialConfig.colorHex || '#ff6b6b', weight: 3, opacity: 0.8 },
+          onEachFeature: (f, l) => {
+            const name = entry.name || f.properties?.name;
+            const description = entry.description || f.properties?.description;
+            const communication = f.properties?.communication || entry.communication;
 
-				  let html = '<div class="popup-content">';
-				  if (name) html += `<strong>${name}</strong><br>`;
-				  if (description) {
-					// " | " durch Zeilenumbrüche ersetzen
-					html += description.replace(/\s*\|\s*/g, '<br>');
-				  }
-				  html += '</div>'
-				  if (name || description) {
-					l.bindPopup(html);
-				  }
-				}
-			  }).addTo(mapLayers.waterways);
-			  waterwaysCount++;
-			}
+            let html = '<div class="popup-content">';
+            if (name) html += `<strong>${name}</strong><br>`;
+            
+            // statt einfachem replace jetzt die Hilfsfunktion verwenden
+            html += descriptionToHtml(description, communication, null, currentLang);
+
+            html += '</div>';
+            if (name || description) {
+              l.bindPopup(html);
+            }
+          }
+        }).addTo(mapLayers.waterways);
+        waterwaysCount++;
+      }
 		  }
 		});
 	  }
@@ -949,7 +984,7 @@
 					let html = '<div class="popup-content">';
 					if (f.properties?.name) html += `<strong>${f.properties.name}</strong><br>`;
 					
-          html +=descriptionToHtml(f.properties?.description,f.properties?.communication,currentLang);
+          html +=descriptionToHtml(f.properties?.description,f.properties?.communication,f.properties?.berichte,currentLang);
 					html += '</div>';
 					l.bindPopup(html);
 				  }

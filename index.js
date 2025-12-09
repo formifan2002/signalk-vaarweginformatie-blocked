@@ -295,8 +295,8 @@ module.exports = function(app) {
 
           // ResourceSet für Punkte erstellen und cachen
           const resourceDescription = languageIsGerman
-            ? 'Gesperrte Wasserstraßen von vaarweginformatie.nl'
-            : 'Blocked waterways from vaarweginformatie.nl';
+            ? 'Gesperrte Objekte (Brücken, Schleusen,..) und Wasserstraßen von vaarweginformatie.nl'
+            : 'Blocked objects (bridges, sluices,...) and waterways from vaarweginformatie.nl';
 
           cachedResourceSet = {
             type: 'ResourceSet',

@@ -14,12 +14,11 @@ public/*
 dist/
 build/
 
+.github/copilot-instructions.md
+
 # VS Code
 .vscode/
 *.code-workspace
-
-# npm lock file
-package-lock.json
 
 # npm files
 .npmignore

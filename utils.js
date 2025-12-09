@@ -9,9 +9,9 @@ const limitationLabels = {
   CONBRE:   { de: "Konvoibreite", en: "convoy breadth" },
   VESLEN:   { de: "Schiffslänge", en: "vessel length" },
   CONLEN:   { de: "Konvoilänge", en: "convoy length" },
-  CLEHEI:   { de: "Max. Schiffslänge", en: "clearance height" },
+  CLEHEI:   { de: "Durchfahrtshöhe", en: "clearance height" },
   VESHEI:   { de: "Schiffshöhe über Wasser", en: "vessel air draught" },
-  AVALEN:   { de: "Durchfahrtshöhe", en: "available length" },
+  AVALEN:   { de: "verfügbare Länge", en: "available length" },
   CLEWID:   { de: "Durchfahrtsbreite", en: "clearance width" },
   AVADEP:   { de: "Verfügbare Tiefe", en: "available depth" },
   LEADEP:   { de: "Geringste gemessene Tiefe", en: "least depth sounded" },
@@ -78,9 +78,7 @@ const intervalExcludeMap = {
   WED: { en: "Wednesday", de: "Mittwoch" },
   THU: { en: "Thursday", de: "Donnerstag" },
   FRI: { en: "Friday", de: "Freitag" },
-  SAT: { en: "Saturday", de: "Samstag" },
-  WRK: { en: "Monday to Friday", de: "Montag bis Freitag" },
-  WKN: { en: "Saturday and Sunday", de: "Samstag und Sonntag" },
+  SAT: { en: "Saturday", de: "Samstag" }
 };
 
 const targetGroupMap = {
@@ -184,49 +182,11 @@ function calculateRouteDistance(coordinates) {
   return Math.round(totalDistance);
 }
 
-function formatBlockageDescription(blockages, languageIsGerman) {
-  return (blockages || []).map(block => {
-    const startStr = formatDateTime(block.startDate);
-    const endStr = block.endDate ? formatDateTime(block.endDate) : null;
-
-    if (!endStr) {
-      return languageIsGerman ? `ab ${startStr}` : `from ${startStr}`;
-    }
-
-    const startDay = startStr.split(' ')[0];
-    const endDay = endStr.split(' ')[0];
-    const startTime = startStr.split(' ')[1];
-    const endTime = endStr.split(' ')[1];
-
-    if (startDay === endDay) {
-      return languageIsGerman
-        ? `von ${startDay} ${startTime} bis ${endTime}`
-        : `from ${startDay} ${startTime} to ${endTime}`;
-    } else {
-      return languageIsGerman
-        ? `von ${startStr} bis ${endStr}`
-        : `from ${startStr} to ${endStr}`;
-    }
-  }).join(" | ");
-}
-
 function movePointEast(lat, lon, meters) {
   const latRad = lat * Math.PI / 180;
   const metersPerDegree = 111320 * Math.cos(latRad);
   const deltaLon = meters / metersPerDegree;
   return [lat, lon + deltaLon, ];
-}
-
-function formatDateTime(dateString) {
-  if (!dateString) return 'unbekannt';
-  const d = new Date(dateString);
-  if (!isFinite(d)) return 'unbekannt';
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
 function formatDateForOpenCPN(dateString, languageIsGerman) {
@@ -433,72 +393,63 @@ function findMatches(obj, app, detailUrl) {
   }
 }
 
-function createGroupBlockages(locationGroup, details, validUntilMs, detailUrl, app, languageIsGerman) {
-  const lat = locationGroup.lat;
-  const lon = locationGroup.lon;
-  const bericht = `${details.ntsNumber.year},${details.ntsNumber.number}`;
+function createBlockages(target, details, validUntilMs, detailUrl, app, languageIsGerman, isRoute = false) {
+  const lat = isRoute ? null : target.lat;
+  const lon = isRoute ? null : target.lon;
+  const bericht = `${details.ntsNumber.year}-${details.ntsNumber.number}`;
   const allLimitations = [];
 
-findMatches(details, app,  detailUrl);
-
-
-  // Hilfsfunktion: aus UTC-Mitternacht + Zeitanteil → lokale Mitternacht + ms seit Mitternacht
-  const normalizePeriod = (dateTs, timeMs) => {
-    // Basis: UTC-Mitternacht
-    const utcMidnight = new Date(dateTs);
-    utcMidnight.setUTCHours(0, 0, 0, 0);
-
-    // Absoluter Zeitpunkt = UTC-Mitternacht + Zeitanteil
-    const abs = utcMidnight.getTime() + (timeMs ?? 0);
-
-    // Lokale Mitternacht
-    const localMidnight = new Date(abs);
-    localMidnight.setHours(0, 0, 0, 0);
-
-    return {
-      dateMs: localMidnight.getTime(),
-      timeMs: abs - localMidnight.getTime(),
-      absTime: abs
-    };
-  };
-
   if (details && Array.isArray(details.subjectLimitations)) {
-    details.subjectLimitations.forEach(subject => {
-      if (
-        Array.isArray(subject.limitations) &&
-        subject.geoObject?.coordinates?.[0]?.lat === lat &&
-        subject.geoObject?.coordinates?.[0]?.lon === lon
-      ) {
+    details.subjectLimitations.forEach((subject, idx) => {
+      let coordsMatch = false;
+
+      if (isRoute) {
+        // Route: Prüfe ob alle Koordinaten übereinstimmen
+        if (Array.isArray(subject.limitations) && 
+            subject.geoObject?.coordinates &&
+            target.coordinates.length === subject.geoObject.coordinates.length) {
+          
+          coordsMatch = target.coordinates.every((coord, idx) => {
+            const apiCoord = subject.geoObject.coordinates[idx];
+            return apiCoord && 
+                   Math.abs(coord[0] - apiCoord.lon) < 0.00001 && 
+                   Math.abs(coord[1] - apiCoord.lat) < 0.00001;
+          });
+        }
+      } else {
+        // Punkt: Prüfe ob ein Punkt übereinstimmt
+        coordsMatch = Array.isArray(subject.limitations) &&
+                      subject.geoObject?.coordinates?.[0]?.lat === lat &&
+                      subject.geoObject?.coordinates?.[0]?.lon === lon;
+      }
+
+      if (coordsMatch && Array.isArray(subject.limitations)) {
         subject.limitations.forEach(lim => {
           if (Array.isArray(lim.limitationPeriods)) {
-            lim.limitationPeriods.forEach(period => {
-              const rawStartDate = period.startDate ?? 0;
-              const rawEndDate   = period.endDate   ?? 0;
-              const startTimeMs  = period.startTimeMs ?? 0;
-              const endTimeMs    = period.endTimeMs   ?? 0;
-
-              // Start/End normalisieren
-              const startNorm = normalizePeriod(rawStartDate, startTimeMs);
-              const endNorm   = normalizePeriod(rawEndDate,   endTimeMs);
-
-              // Grenzen: heutige lokale Mitternacht
-              const nowDate = new Date();
-              nowDate.setHours(0, 0, 0, 0);
-              const nowMs = nowDate.getTime();
-
-              const startValid = startNorm.absTime >= nowMs && startNorm.absTime <= validUntilMs;
-              const endValid   = endNorm.absTime   >= nowMs && endNorm.absTime   <= validUntilMs;
-              const overlaps   = startNorm.absTime <= validUntilMs && endNorm.absTime >= nowMs;
-
-              if (startValid || endValid || overlaps) {
-               const pushPeriod={
-                    startDate: startNorm.dateMs,     // lokale Mitternacht
-                    startTimeMs: startNorm.timeMs,   // ms seit lokaler Mitternacht
-                    endDate: endNorm.dateMs,
-                    endTimeMs: endNorm.timeMs
-                  }
-                if (period.interval){
+            lim.limitationPeriods.forEach((period) => {
+              const startDate = (period.startDate ?? 0)+ (period.startTimeMs ?? 0);
+              const endDate = (period.endDate ?? 0) + (period.endTimeMs ?? 0);
+              isRelevant = (endDate === 0 || endDate>= Date.now())
+              if (isRelevant) {
+                const pushPeriod = {
+                  startDate: period.startDate
+                };
+                
+                if (period.endDate) {
+                  pushPeriod.endDate = period.endDate;
+                }
+                
+                if (period.startTimeMs) {
+                  pushPeriod.startTimeMs = period.startTimeMs;
+                }
+                if (period.endTimeMs) {
+                  pushPeriod.endTimeMs = period.endTimeMs;
+                }
+                if (period.interval) {
                   pushPeriod.interval = period.interval;
+                }
+                if (lim.limitationCode) {
+                  pushPeriod.limitationCode = lim.limitationCode;
                 }
                 allLimitations.push({
                   lim,
@@ -513,53 +464,61 @@ findMatches(details, app,  detailUrl);
     });
   }
 
-  // Sortierung nach lokalem Start
-  allLimitations.sort((a, b) => {
-    const aKey = (a.period.startDate || 0) + (a.period.startTimeMs || 0);
-    const bKey = (b.period.startDate || 0) + (b.period.startTimeMs || 0);
-    return aKey - bKey;
-  });
-
   allLimitations.forEach(record => {
-    if (!locationGroup.berichte[bericht]) {
-      locationGroup.berichte[bericht] = {
-        bericht: bericht.replace(',', '-'),
-        reasonCode: getLimitationCode('reasonCode', details.reasonCode, lat, lon, detailUrl, app, languageIsGerman),
-        subjectCode: details.subjectCode,
-        detailUrl: detailUrl,
-        communication: formatCommunications(details.communications, languageIsGerman),
-        blockages: []
-      };
+    if (!target.berichte[bericht]) {
+      const newBericht = {};
+      newBericht.bericht = bericht.replace(',', '-');
+      if (details.reasonCode) {
+        newBericht.reasonCode = getLimitationCode('reasonCode', details.reasonCode, lat, lon, detailUrl, app, languageIsGerman);
+      }
+      if (record.lim.limitationCode) {
+        newBericht.status = record.lim.limitationCode;
+      }
+      newBericht.subjectCode = details.subjectCode;
+      newBericht.detailUrl = detailUrl;
+      newBericht.communication = formatCommunications(details.communications, languageIsGerman);
+      newBericht.contents= details.contents;
+      newBericht.blockages = [];
+      target.berichte[bericht] = newBericht;
+    }
+    if (isRoute && details.contents){
+        target.contents= details.contents;
     }
     const blockage = {
-      startDate: record.period.startDate,
-      startTimeMs: record.period.startTimeMs,
-      endDate: record.period.endDate,
-      endTimeMs: record.period.endTimeMs,
-      status: record.lim.limitationCode
+      startDate: record.period.startDate
     };
-    if (record.lim.indicationCode){
+    
+    if (record.period.endDate) {
+      blockage.endDate = record.period.endDate;
+    }
+    if (record.period.startTimeMs !== undefined) {
+      blockage.startTimeMs = record.period.startTimeMs;
+    }
+    if (record.period.endTimeMs !== undefined) {
+      blockage.endTimeMs = record.period.endTimeMs;
+    }
+    if (record.lim.indicationCode) {
       blockage.indicationCode = record.lim.indicationCode;
     }
-    if (record.lim.unit){
+    if (record.lim.unit) {
       blockage.unit = record.lim.unit;
     }
-    if (record.lim.value){
+    if (record.lim.value) {
       blockage.value = record.lim.value;
     }
-    if (record.lim.referenceCode){
+    if (record.lim.referenceCode) {
       blockage.referenceCode = record.lim.referenceCode;
     }
-    if (record.lim.indicationCode){
-      blockage.indicationCode = record.lim.indicationCode;
-    }
-    if (record.lim.targetGroups && record.lim.targetGroups.length > 0){
+    if (record.lim.targetGroups && record.lim.targetGroups.length > 0) {
       blockage.targetGroups = record.lim.targetGroups;
     }
     if (record.period.interval) {
       blockage.interval = record.period.interval;
     }
-    locationGroup.berichte[bericht].blockages.push(blockage);
+    if (record.period.limitationCode) {
+      blockage.limitationCode = record.period.limitationCode;
+    }
+    target.berichte[bericht].blockages.push(blockage);
   });
 }
 
@@ -619,48 +578,69 @@ function formatDescription(locationGroup, app, languageIsGerman) {
   const lon = locationGroup.lon ?? null;
   const berichtValues = Object.values(locationGroup.berichte);
 
-  // Dauer (Millis seit Mitternacht) zu "HH:MM" ohne Zeitzonenverschiebung
-  const msToTime = ms => {
-    if (ms === undefined || ms === null || !Number.isFinite(ms)) return '';
-    const totalMinutes = Math.floor(ms / 60000);
-    const hh = Math.floor(totalMinutes / 60);
-    const mm = totalMinutes % 60;
-    const pad = n => (n < 10 ? '0' + n : '' + n);
-    return `${pad(hh)}:${pad(mm)}`;
+function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
+  if (!ms) return "";
+
+  // Locale abhängig vom Parameter
+  const locale = !languageIsGerman ? "en-GB" : "de-DE";
+  if (!hasTime){
+    if (!toTime){
+      return new Date(ms).toLocaleString("de-DE", {weekday: "long",day: "2-digit",month: "2-digit",year: "2-digit"}).replace(',','');
+    }else{
+      return new Date(ms).toLocaleString(locale,{hour: '2-digit', minute: '2-digit'})
+    }
+  }
+  const ts = ms < 1e12 ? ms * 1000 : ms;
+  const date = new Date(ts);
+  const offsetHours = 1
+  const localDate = new Date(date.getTime() + offsetHours * 3600 * 1000);
+  if (toTime === true) {
+    const hh = String(localDate.getHours()).padStart(2, "0");
+    const mm = String(localDate.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  const weekdayOpts = { weekday: "long" };
+  const dateOpts    = { day: "2-digit", month: "2-digit", year: "numeric" };
+  return `${localDate.toLocaleDateString(locale, weekdayOpts)} ${localDate.toLocaleDateString(locale, dateOpts)}`;
+}
+
+
+  // Prüfen, ob Start- und Enddatum derselbe lokale Tag sind
+  const isSameLocalDay = (aMs, aHasTime, bMs, bHasTime,languageIsGerman) => {
+    if (!aMs || !bMs) return false;
+    return formatDate(aMs,aHasTime,languageIsGerman) === formatDate(bMs,bHasTime,languageIsGerman);
   };
 
+
   const texts = berichtValues.map((berichtGroup, bIndex) => {
-    let berichtHeader = `${berichtGroup.bericht} - ${berichtGroup.reasonCode}: `;
-
+    let berichtHeader = `${berichtGroup.bericht}${berichtGroup.reasonCode ? ' - ' + berichtGroup.reasonCode : ''}: `.trim();
+    let limitationCode=""
     const blockagesText = berichtGroup.blockages.map((blockage) => {
-      const startDateObj = blockage.startDate ? new Date(blockage.startDate) : null;
-      const endDateObj   = blockage.endDate   ? new Date(blockage.endDate)   : null;
-      const locale = languageIsGerman ? "de-DE" : "en-US";
+      let limitationText=""
+      if (blockage.limitationCode && blockage.limitationCode!=limitationCode){
+        let type = getLimitationCode('limitationCode', blockage.limitationCode, lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
+        if (type && type !== "") {
+          limitationText= ` -- ${type}: -- `;
+        }
+        limitationCode=blockage.limitationCode;      
+      }
+      const startDateLocal = (blockage.startDate ?? 0) + (blockage.startTimeMs ?? 0);
+      const endDateLocal   = (blockage.endDate ?? 0)   + (blockage.endTimeMs ?? 0);
+      const hasStartTime = blockage.startTimeMs !== undefined;
+      const hasEndTime   = blockage.endTimeMs   !== undefined;
 
-      // Wochentag und Datum getrennt (lokal) formatieren
-      const weekdayOpts = { weekday: "long" };
-      const dateOpts    = { day: "2-digit", month: "2-digit", year: "2-digit" };
+      const dateStr    = startDateLocal!=0 ? formatDate(startDateLocal,hasStartTime,languageIsGerman) : "";
+      const endDateStr = endDateLocal!=0   ? formatDate(endDateLocal,hasEndTime,languageIsGerman) : "";
 
-      const dateStr = startDateObj && isFinite(startDateObj)
-        ? `${startDateObj.toLocaleDateString(locale, weekdayOpts)} ${startDateObj.toLocaleDateString(locale, dateOpts)}`
-        : '';
-
-      const endDateStr = endDateObj && isFinite(endDateObj)
-        ? `${endDateObj.toLocaleDateString(locale, weekdayOpts)} ${endDateObj.toLocaleDateString(locale, dateOpts)}`
-        : '';
-
-      // Zeiten aus Millis seit Mitternacht (keine Date-Objekte!)
-      const startTime = msToTime(blockage.startTimeMs);
-      const endTime   = blockage.endTimeMs !== undefined ? msToTime(blockage.endTimeMs) : "";
-
-      let type = getLimitationCode('limitationCode', blockage.status, lat, lon, blockage.detailUrl, app, languageIsGerman);
+      const startTime = hasStartTime ? formatDate(startDateLocal,hasStartTime,languageIsGerman,true) : "";
+      const endTime   = hasEndTime   ? formatDate(endDateLocal,hasEndTime,languageIsGerman,true)   : "";
 
       let tgText = "";
       if (Array.isArray(blockage.targetGroups) && blockage.targetGroups.length > 0) {
-        tgText = formatTargetGroup(blockage.targetGroups[0], lat, lon, blockage.detailUrl, app, languageIsGerman);
+        tgText = formatTargetGroup(blockage.targetGroups[0], lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
       }
 
-      const indication = formatIndicationCode(blockage.indicationCode, lat, lon, blockage.detailUrl, app, languageIsGerman);
+      const indication = formatIndicationCode(blockage.indicationCode, lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
       let value = blockage.value !== undefined ? String(blockage.value) : "";
       let unitText = "";
       if (blockage.unit) {
@@ -671,10 +651,12 @@ function formatDescription(locationGroup, app, languageIsGerman) {
           unitText = languageIsGerman ? (valNum === 1 ? "Minute" : "Minuten") : (valNum === 1 ? "minute" : "minutes");
         } else if (blockage.unit === "D") {
           unitText = languageIsGerman ? (valNum === 1 ? "Tag" : "Tage") : (valNum === 1 ? "day" : "days");
+        } else {
+          unitText = blockage.unit.toLowerCase();
         }
       }
 
-      const refText = formatReferenceCode(blockage.referenceCode, lat, lon, blockage.detailUrl, app, languageIsGerman);
+      const refText = formatReferenceCode(blockage.referenceCode, lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
       const extraParts = [];
       if (indication) extraParts.push(indication);
       if (value) extraParts.push(value);
@@ -683,35 +665,47 @@ function formatDescription(locationGroup, app, languageIsGerman) {
 
       const extra = extraParts.length ? ` (${extraParts.join(" ")})` : "";
 
-      const interval=getIntervalCode('interval', blockage.interval, lat, lon, blockage.detailUrl, app, languageIsGerman);
+      const interval = getIntervalCode('interval', blockage.interval, lat, lon, blockage.detailUrl, app, languageIsGerman);
 
-      const hasEndDate = endDateObj !== null;
-      const sameDay =
-        startDateObj && endDateObj &&
-        startDateObj.getDate() === endDateObj.getDate() &&
-        startDateObj.getMonth() === endDateObj.getMonth() &&
-        startDateObj.getFullYear() === endDateObj.getFullYear();
+      const hasEndDate = !!endDateLocal;
+      const sameDay = isSameLocalDay(startDateLocal,hasStartTime, endDateLocal,hasEndTime);
 
       let text = "";
-      const intervalPrefix = interval ? interval + " " : "";
+      const intervalPrefix = (interval && !interval.includes("#")) ? " "+interval : "";
+
       if (!hasEndDate) {
-        text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ab ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
+        text = `${tgText ? " " + tgText : ""} ab ${dateStr}`
+             + intervalPrefix
+             + (hasStartTime && startTime ? " " + startTime : "")
+             + (hasEndTime && endTime ? "-" + endTime : "")
+             + extra;
       } else if (sameDay) {
-        text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateStr}${startTime ? " " + startTime : ""}${endTime ? "-" + endTime : ""}${extra}`;
+        text = `${tgText ? " " + tgText : ""} ${dateStr}`
+             + intervalPrefix
+             + (hasStartTime && startTime ? " " + startTime : "")
+             + (hasEndTime && endTime ? "-" + endTime : "")
+             + extra;
       } else {
-        if (interval === "DAY") {
+        if (interval !== "") {
           const dateRange = `${dateStr} – ${endDateStr}`;
           let timeRange = "";
-          if (startTime || endTime) {
-            timeRange = ` ${startTime}${endTime ? "-" + endTime : ""}`;
+          if (hasStartTime && startTime) {
+            timeRange += ` ${startTime}`;
           }
-          text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateRange}${timeRange}${extra}`;
+          if (hasEndTime && endTime) {
+            timeRange += (timeRange ? "-" : " ") + endTime;
+          }
+          text = `${tgText ? " " + tgText : ""} ${dateRange}${intervalPrefix}${timeRange}${extra}`;
         } else {
-          // explizite Ausgabe mit Startdatum+Startzeit und Enddatum+Endzeit
-          text = `${intervalPrefix}${type}${tgText ? " " + tgText : ""} ${dateStr}${startTime ? " " + startTime : ""} - ${endDateStr}${endTime ? " " + endTime : ""}${extra}`;
+          text = `${tgText ? " " + tgText : ""} ${dateStr}`
+               + intervalPrefix
+               + (hasStartTime && startTime ? " " + startTime : "")
+               + ` - ${endDateStr}`
+               + (hasEndTime && endTime ? " " + endTime : "")
+               + extra;
         }
       }
-      return text.trim();
+      return `${limitationText}${text.trim()}`;
     }).join(", ");
 
     let result = berichtHeader + blockagesText;
@@ -723,6 +717,7 @@ function formatDescription(locationGroup, app, languageIsGerman) {
 
   return texts.join(" ");
 }
+
 
 
 // Generiere GPX für Routes
@@ -787,17 +782,9 @@ module.exports = {
   calculateDistance,
   calculateRouteDistance,
   clampDays,
-  createGroupBlockages,
-  escapeXml,
-  formatBlockageDescription,
-  formatDateForOpenCPN,
-  formatDateISO,
-  formatDateTime,
+  createBlockages,
   formatDescription,
-  formatDirectionCode,
-  formatTargetGroup,
   generateRoutesGPX,
   generateWaypointsGPX,
-  getLimitationCode,
   movePointEast
 };

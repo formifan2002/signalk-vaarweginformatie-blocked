@@ -1,24 +1,14 @@
-// Revised index.js - helpers moved to ./utils.js
 const fs = require('fs');
 const axios = require('axios');
 
 const {
   buildApiUrl,
-  calculateDistance,
   calculateRouteDistance,
   clampDays,
-  createGroupBlockages,
-  escapeXml,
-  formatBlockageDescription,
-  formatDateForOpenCPN,
-  formatDateISO,
-  formatDateTime,
+  createBlockages,
   formatDescription,
-  formatDirectionCode,
-  formatTargetGroup,
   generateRoutesGPX,
   generateWaypointsGPX,
-  getLimitationCode,
   movePointEast
 } = require('./utils');
 
@@ -50,151 +40,102 @@ async function toGeoJSON(messages, movePointMeters, validUntilMs, languageIsGerm
   const routes = [];
 
   // Schritt 1: Nachrichten verarbeiten und gruppieren
-for (const msg of messages || []) {
-  if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
+  for (const msg of messages || []) {
+    if (!Array.isArray(msg.location) || msg.location.length === 0) continue;
 
-  const validPoints = msg.location.filter(p =>
-    typeof p.lon === 'number' && typeof p.lat === 'number'
-  );
-
-  if (validPoints.length === 0) continue;
-
-  // Wenn mehr als 1 Punkt: Route
-  if (validPoints.length > 1) {
-    const coordinates = validPoints.map(p => [p.lon, p.lat]);
-    const distance = calculateRouteDistance(coordinates);
-    const berichtKey = `${msg.ntsNumber.year}-${msg.ntsNumber.number}`;
-
-    // Route mit denselben Koordinaten suchen
-    let existingRoute = routes.find(r =>
-      r.coordinates.length === coordinates.length &&
-      r.coordinates.every((c, i) =>
-        c[0] === coordinates[i][0] && c[1] === coordinates[i][1]
-      )
+    const validPoints = msg.location.filter(p =>
+      typeof p.lon === 'number' && typeof p.lat === 'number'
     );
 
-    if (!existingRoute) {
-      existingRoute = {
-        name: msg.locationName,
-        distance: distance,
-        coordinates: coordinates,
-        fairway: msg.fairwayName,
-        startDate: msg.startDate,   // initial setzen
-        endDate: msg.endDate,       // initial setzen
-        berichte: {}
-      };
-      routes.push(existingRoute);
+    if (validPoints.length === 0) continue;
+
+    // Wenn mehr als 1 Punkt: Route
+    if (validPoints.length > 1) {
+      const coordinates = validPoints.map(p => [p.lon, p.lat]);
+      const distance = calculateRouteDistance(coordinates);
+      const berichtKey = `${msg.ntsNumber.year}-${msg.ntsNumber.number}`;
+
+      let existingRoute = routes.find(r =>
+        r.coordinates.length === coordinates.length &&
+        r.coordinates.every((c, i) =>
+          c[0] === coordinates[i][0] && c[1] === coordinates[i][1]
+        )
+      );
+
+      if (!existingRoute) {
+        existingRoute = {
+          name: msg.locationName +
+            (msg.fairwayName &&
+            msg.fairwayName !== "" &&
+            !msg.locationName.includes(msg.fairwayName)
+              ? ` (${msg.fairwayName})`
+              : ''),
+          distance: distance,
+          coordinates: coordinates,
+          fairway: msg.fairwayName,
+          ntsNumber: berichtKey,
+          organisation: msg.ntsNumber.organisation,
+          ntsType: msg.ntsType,
+          berichte: {}
+        };
+        routes.push(existingRoute);
+      }
     } else {
-      // Start/End-Datum aktualisieren
-      if (existingRoute.startDate > msg.startDate) {
-        existingRoute.startDate = msg.startDate;
-      }
-      if (existingRoute.endDate < msg.endDate) {
-        existingRoute.endDate = msg.endDate;
+      const firstPoint = validPoints[0];
+      const lat = firstPoint.lat;
+      const lon = firstPoint.lon;
+      const key = `${lat},${lon}`;
+
+      if (!locationGroups[key]) {
+        locationGroups[key] = {
+          lat: parseFloat(lat),
+          lon: parseFloat(lon),
+          locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
+          fairway: msg.fairwayName,
+          status: msg.limitationCode,
+          ntsNumber: `${msg.ntsNumber.year}-${msg.ntsNumber.number}`,
+          organisation: msg.ntsNumber.organisation,
+          ntsType: msg.ntsType,
+          startDate: msg.startDate,
+          endDate: msg.endDate,
+          berichte: {}
+        };
       }
     }
-
-    // Bericht-Eintrag suchen oder neu anlegen
-    if (!existingRoute.berichte[berichtKey]) {
-      const detailUrl = `https://vaarweginformatie.nl/frp/api/messages/${String(msg.ntsType).toLowerCase()}/${msg.ntsNumber.organisation}-${berichtKey}`;
-      existingRoute.berichte[berichtKey] = {
-        bericht: berichtKey,
-        detailUrl: detailUrl,
-        reasonCode: getLimitationCode('limitationCode',msg.limitationCode,null,null,detailUrl,app,languageIsGerman),
-        blockages: []
-      };
-    }
-
-    const start = new Date(msg.startDate);
-    const end   = new Date(msg.endDate);
-    const startMidnight = new Date(start);
-    startMidnight.setHours(0, 0, 0, 0);
-    const endMidnight = new Date(end);
-    endMidnight.setHours(0, 0, 0, 0);
-    // Millisekunden seit Mitternacht
-    const startTimeMs = start.getTime() - startMidnight.getTime();
-    const endTimeMs   = end.getTime() - endMidnight.getTime();
-    // Blockage hinzufügen
-    existingRoute.berichte[berichtKey].blockages.push({
-      startDate: startMidnight.getTime(), // Mitternacht als Timestamp
-      endDate: endMidnight.getTime(),     // Mitternacht als Timestamp
-      startTimeMs: startTimeMs,
-      endTimeMs: endTimeMs
-    });
-    continue;
   }
 
-  // Einzelner Punkt: gruppieren
-  const firstPoint = validPoints[0];
-  const lat = firstPoint.lat;
-  const lon = firstPoint.lon;
-  const key = `${lat},${lon}`;
+  // Schritt 2: Detail-Daten für Routen abrufen
+  app.debug(`Processing ${routes.length} routes for detail data`);
 
-  if (!locationGroups[key]) {
-    locationGroups[key] = {
-      lat: parseFloat(lat),
-      lon: parseFloat(lon),
-      locationName: msg.locationName || msg.title || (languageIsGerman ? 'Gesperrte Wasserstraße' : 'Blocked waterway'),
-      fairway: msg.fairwayName,
-      status: msg.limitationCode,
-      ntsNumber: `${msg.ntsNumber.year}-${msg.ntsNumber.number}`,
-      organisation: msg.ntsNumber.organisation,
-      ntsType: msg.ntsType,
-      startDate: msg.startDate,
-      endDate: msg.endDate,
-      berichte: {}
-    };
-  }
-}
-
-  // Routes sortiern und überschneidende Tage zusammenfassen
-  for (const route of routes) {
-      for (const berichtKey of Object.keys(route.berichte)) {
-        const bericht = route.berichte[berichtKey];
-
-        if (Array.isArray(bericht.blockages) && bericht.blockages.length > 0) {
-          // 1. Nach Startzeitpunkt (Datum + Zeitanteil) sortieren
-          bericht.blockages.sort((a, b) => 
-            (a.startDate + (a.startTimeMs || 0)) - (b.startDate + (b.startTimeMs || 0))
-          );
-
-          // 2. Zusammenfassen, wenn nahtlos
-          const merged = [];
-          let current = { ...bericht.blockages[0] };
-
-          for (let i = 1; i < bericht.blockages.length; i++) {
-            const next = bericht.blockages[i];
-
-            const currentEnd = current.endDate + (current.endTimeMs || 0);
-            const nextStart  = next.startDate   + (next.startTimeMs || 0);
-
-            // "nahtlos" = Ende der aktuellen Blockage entspricht dem Start der nächsten
-            if (currentEnd >= nextStart) {
-              // Endzeit ggf. erweitern
-              const nextEnd = next.endDate + (next.endTimeMs || 0);
-              if (nextEnd > currentEnd) {
-                current.endDate   = next.endDate;
-                current.endTimeMs = next.endTimeMs;
-              }
-            } else {
-              merged.push(current);
-              current = { ...next };
-            }
-          }
-          merged.push(current);
-
-          bericht.blockages = merged;
-        }
+  for (let i = 0; i < routes.length; i++) {
+    const route = routes[i];
+    const detailUrl = `https://vaarweginformatie.nl/frp/api/messages/${String(route.ntsType).toLowerCase()}/${route.organisation}-${route.ntsNumber}`;
+    route.detailUrl = detailUrl;
+    try {
+      const resp = await axios.get(detailUrl, { 
+        headers: { Accept: "application/json" },
+        timeout: 10000
+      });
+      
+      const detailData = resp && resp.data ? resp.data : null;
+      
+      if (detailData) {
+        createBlockages(route, detailData, validUntilMs, detailUrl, app, languageIsGerman, true); // ✅ true für Routen!
+      } else {
+        app.debug(`No detail data for route ${i+1}/${routes.length}`);
       }
+    } catch (e) {
+      app.error(`Detail fetch failed for route ${detailUrl}: ${e.message}`);
+    }
   }
-
-  // Beschreibungen für Routes erzeugen
+    
+   // Beschreibungen für Routes erzeugen
   for (const route of routes) {
-      const description = formatDescription(route, app, languageIsGerman);
-      route.description = description; 
+    const description = formatDescription(route, app, languageIsGerman);
+    route.description = description; 
   }
 
-  // Schritt 2: Detail-Daten für Punkte abrufen
+  // Schritt 3: Detail-Daten für Punkte abrufen
   const groupKeys = Object.keys(locationGroups);
   app.debug(`Processing ${groupKeys.length} location groups`);
 
@@ -206,38 +147,35 @@ for (const msg of messages || []) {
     try {
       const resp = await axios.get(detailUrl, { 
         headers: { Accept: "application/json" },
-        timeout: 10000 // 10 Sekunden Timeout
+        timeout: 10000
       });
       
       const detailData = resp && resp.data ? resp.data : null;
       
       if (detailData) {
-        createGroupBlockages(group, detailData, validUntilMs, detailUrl, app, languageIsGerman);
+        createBlockages(group, detailData, validUntilMs, detailUrl, app, languageIsGerman, false);
       } else {
         app.debug(`No detail data for group ${i+1}/${groupKeys.length}`);
       }
     } catch (e) {
       app.error(`Detail fetch failed for ${detailUrl}: ${e.message}`);
-      continue;
     }
   }
 
-  // Schritt 3: Features aus Punkten erstellen
+  // Schritt 4: Features aus Punkten erstellen
   const features = [];
   for (const key in locationGroups) {
     const group = locationGroups[key];
     
     try {
       const description = formatDescription(group, app, languageIsGerman);
-
-      // WICHTIG: movePointEast gibt [lon, lat] zurück!
       const [shiftedLat, shiftedLon] = movePointEast(group.lat, group.lon, movePointMeters);
 
       const feature = {
         type: 'Feature',
         geometry: {
           type: 'Point',
-          coordinates: [shiftedLon, shiftedLat]  // GeoJSON Format: [lon, lat]
+          coordinates: [shiftedLon, shiftedLat]
         },
         properties: {
           name: group.locationName,
@@ -254,11 +192,9 @@ for (const msg of messages || []) {
       features.push(feature);
     } catch (e) {
       app.error(`Failed to create feature for ${key}: ${e.message}`);
-      // Weiter mit nächstem Feature
-      continue;
     }
   }
-
+  
   app.debug(`Created ${features.length} features and ${routes.length} routes`);
   return { points: features, routes: routes };
 }
@@ -352,7 +288,6 @@ module.exports = function(app) {
 
           app.debug(`Messages transformed to ${geoData.points.length} objects and ${geoData.routes.length} routes`);
 
-          // **NEU: Alte Routen explizit aus cachedRoutes löschen**
           for (const routeId of pluginRouteIds) {
             delete cachedRoutes[routeId];
           }
@@ -381,12 +316,14 @@ module.exports = function(app) {
 
           // Routen cachen (für routes Provider)
           geoData.routes.forEach((route, index) => {
-            const routeId = `blocked-route-${index}`;  // **GEÄNDERT: Entferne Timestamp**
+            const routeId = `blocked-route-${index}`;
             pluginRouteIds.add(routeId);
             cachedRoutes[routeId] = {
               name: route.name,
               description: route.description,
               distance: route.distance,
+              contents: route.contents,
+              detailUrl: route.detailUrl,
               feature: {
                 type: 'Feature',
                 geometry: {
@@ -402,7 +339,7 @@ module.exports = function(app) {
 
           app.debug(`ResourceSet updated for ${geoData.points.length} objects and ${geoData.routes.length} routes`);
 
-          // **NEU: SignalK über Änderungen benachrichtigen (wenn möglich)**
+          // SignalK über Änderungen benachrichtigen (wenn möglich)
           if (typeof app.handleMessage === 'function') {
             app.handleMessage('resources', {
               updates: [{

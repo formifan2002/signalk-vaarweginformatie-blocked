@@ -800,7 +800,7 @@
 	  }
 	}
 
-  function descriptionToHtml(description, communication, berichte, currentLang = 'de') {
+function descriptionToHtml(description, berichte, contents, currentLang = 'de') {
   if (!description || typeof description !== 'string') return '';
 
   const reports = description
@@ -821,53 +821,104 @@
     const header = rep.slice(0, colonIdx).trim();
     const body   = rep.slice(colonIdx + 1).trim();
 
-    // Standard: Header plain
+    // Header ggf. verlinken
     let headerHtml = escapeHtml(header);
-
-    // passenden Bericht suchen
-    if (berichte && typeof berichte === 'object') {
-      const found = Object.values(berichte).find(b => {
-        if (!b || typeof b.bericht !== 'string' || !b.bericht.length) return false;
-        const left = header.slice(0, b.bericht.length);
-        return left === b.bericht;
-      });
-
-      if (found && typeof found.detailUrl === 'string' && found.detailUrl) {
-        const url = transformDetailUrl(found.detailUrl);
+    let communicationText ='';
+    let contentsText='';
+    if (berichte) {
+      if (typeof berichte === 'string') {
+        // berichte ist direkt die detailUrl
+        const url = transformDetailUrl(berichte);
         if (url) {
-          // gesamten Header als Link ausgeben
           headerHtml = `<a href="${escapeHtml(url)}" target="_blank">${escapeHtml(header)}</a>`;
         }
+        contentsText=contents;
+      } else if (typeof berichte === 'object') {
+        // bisherige Logik
+        const found = Object.values(berichte).find(b => {
+          if (!b || typeof b.bericht !== 'string' || !b.bericht.length) return false;
+          const left = header.slice(0, b.bericht.length);
+          return left === b.bericht;
+        });
+        if (found && typeof found.detailUrl === 'string' && found.detailUrl) {
+          const url = transformDetailUrl(found.detailUrl);
+          if (url) {
+            headerHtml = `<a href="${escapeHtml(url)}" target="_blank">${escapeHtml(header)}</a>`;
+          }
+        }
+        communicationText = found.communication?found.communication:'';
+        contentsText = found.contents?found.contents:'';
       }
     }
 
-    // Blockages durch "," getrennt
-    const items = body
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
+    // Marker: -- Name -- oder -- Name: -- (Leerzeichen optional)
+    const markerRegex = /--\s*([^-\n]+?)\s*:?\s*--/g;
 
-    html += `<br><strong>${headerHtml}</strong><ul>`;
-    items.forEach(item => {
-      html += `<li>${escapeHtml(item)}</li>`;
-    });
-    html += `</ul>`;
-  });
-
-  // Communication anhängen, falls vorhanden
-  if (communication && typeof communication === 'string' && communication.trim()) {
-    const colonIdx = communication.indexOf(':');
-    if (colonIdx !== -1) {
-      const header = communication.slice(0, colonIdx + 1).trim();
-      const body = communication.slice(colonIdx + 1).trim();
-      html += `<br><strong>${escapeHtml(header)}</strong><br>${escapeHtml(body)}`;
-    } else {
-      html += `<br>${escapeHtml(communication)}`;
+    // Finde alle Marker mit Positionen
+    const markers = [];
+    let m;
+    while ((m = markerRegex.exec(body)) !== null) {
+      markers.push({
+        name: m[1].trim(),
+        start: m.index,
+        end: m.index + m[0].length
+      });
     }
-  }
 
+    html += `<br><strong>${headerHtml}</strong>`;
+
+    // Wenn keine Marker: Standardflache Liste
+    if (markers.length === 0) {
+      const items = body.split(',').map(s => s.trim()).filter(Boolean);
+      html += `<ul>`;
+      items.forEach(item => {
+        html += `<li>${escapeHtml(item)}</li>`;
+      });
+      html += `</ul>`;
+    } else {
+      // Bereiche vor dem ersten Marker als flache Liste (falls vorhanden)
+      const pre = body.slice(0, markers[0].start).trim();
+      if (pre) {
+        const preItems = pre.split(',').map(s => s.trim()).filter(Boolean);
+        if (preItems.length) {
+          html += `<ul>`;
+          preItems.forEach(item => {
+            html += `<li>${escapeHtml(item)}</li>`;
+          });
+          html += `</ul>`;
+        }
+      }
+
+      // Für jeden Marker: <li><strong>Listenname</strong><ul>…</ul></li>
+      for (let i = 0; i < markers.length; i++) {
+        const cur = markers[i];
+        const next = markers[i + 1];
+        const sectionText = body.slice(cur.end, next ? next.start : body.length).trim();
+
+        html += `<ul><li><strong>${escapeHtml(cur.name)}</strong><ul>`;
+
+        // Punkte innerhalb dieses Abschnitts (durch Komma getrennt)
+        const items = sectionText.split(',').map(s => s.trim()).filter(Boolean);
+        items.forEach(item => {
+          const cleaned = item.replace(markerRegex, '').trim();
+          if (cleaned) {
+            html += `<li>${escapeHtml(cleaned)}</li>`;
+          }
+        });
+
+        html += `</ul></li></ul>`;
+      }
+      if (communicationText) {
+        html += `<br><em>${escapeHtml(communicationText)}</em>`;
+      }
+      if (contentsText) {
+        html += `<div><br><em>${escapeHtml(contentsText)}</em></div>`;
+      }
+    }
+  });
   return html;
 }
+
 
 // Hilfsfunktion: Detail-URL transformieren
 function transformDetailUrl(original) {
@@ -913,13 +964,12 @@ function transformDetailUrl(original) {
           onEachFeature: (f, l) => {
             const name = entry.name || f.properties?.name;
             const description = entry.description || f.properties?.description;
-            const communication = f.properties?.communication || entry.communication;
 
             let html = '<div class="popup-content">';
             if (name) html += `<strong>${name}</strong><br>`;
             
             // statt einfachem replace jetzt die Hilfsfunktion verwenden
-            html += descriptionToHtml(description, communication, null, currentLang);
+            html += descriptionToHtml(description, entry.detailUrl, entry.contents, currentLang);
 
             html += '</div>';
             if (name || description) {
@@ -984,7 +1034,7 @@ function transformDetailUrl(original) {
 					let html = '<div class="popup-content">';
 					if (f.properties?.name) html += `<strong>${f.properties.name}</strong><br>`;
 					
-          html +=descriptionToHtml(f.properties?.description,f.properties?.communication,f.properties?.berichte,currentLang);
+          html +=descriptionToHtml(f.properties?.description,f.properties?.berichte,"",currentLang);
 					html += '</div>';
 					l.bindPopup(html);
 				  }

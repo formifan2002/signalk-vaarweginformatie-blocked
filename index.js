@@ -75,9 +75,19 @@ async function toGeoJSON(messages, movePointMeters, validUntilMs, languageIsGerm
           fairway: msg.fairwayName,
           ntsNumber: berichtKey,
           organisation: msg.ntsNumber.organisation,
+          startDate: msg.startDate,
           ntsType: msg.ntsType,
           berichte: {}
         };
+        if (msg.startTimesMs){
+          existingRoute.startTimeMs=msg.startTimeMs;
+        }
+        if (msg.endDate){
+          existingRoute.endDate=msg.endDate;
+        }
+        if (msg.endTimesMs){
+          existingRoute.endTimeMs=msg.endTimeMs
+        }
         routes.push(existingRoute);
       }
     } else {
@@ -324,6 +334,10 @@ module.exports = function(app) {
               distance: route.distance,
               contents: route.contents,
               detailUrl: route.detailUrl,
+              startDate: route.startDate,
+              startTimeMs: route.startTimeMs,
+              endDate: route.endDate,
+              endTimeMs: route.endTimeMs,
               feature: {
                 type: 'Feature',
                 geometry: {

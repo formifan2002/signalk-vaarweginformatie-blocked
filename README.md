@@ -187,3 +187,6 @@ formifan2002
 
 ### Version 1.0.0
 - Initiales Release
+### Version 1.0.1
+- Optimization/enhancement of GPX file output
+- minor bug corrections

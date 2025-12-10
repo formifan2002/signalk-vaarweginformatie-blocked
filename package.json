@@ -1,6 +1,6 @@
 {
   "name": "signalk-vaarweginformatie-blocked",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SignalK plugin for retrieving information about blocked waterways, locks and bridges in the Netherlands from vaarweginformatie.nl and making it available for e.g. freeboard-sk and OpenCPN.",
   "main": "index.js",
   "keywords": [

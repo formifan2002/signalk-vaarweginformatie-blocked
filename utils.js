@@ -52,6 +52,56 @@ const limitationLabels = {
   PRECIP:   { de: "Niederschlag", en: "precipitation" }
 };
 
+const reasonCodeLabels = {
+  EVENT:   { de: "Veranstaltung", en: "event" },
+  WORK:    { de: "Arbeiten", en: "work" },
+  DREDGE:  { de: "Baggerarbeiten", en: "dredging" },
+  EXERC:   { de: "Übungen", en: "exercises" },
+  HIGWAT:  { de: "Hochwasser", en: "high water" },
+  HIWAI:   { de: "Marke I.", en: "water level of cautious navigation" },
+  HIWAII:  { de: "Marke II oder Marke III", en: "prohibitory water level" },
+  LOWWAT:  { de: "Niedrigwasser", en: "low water" },
+  SHALLO:  { de: "Versandung", en: "siltation" },
+  CALAMI:  { de: "Havarie", en: "calamity" },
+  LAUNCH:  { de: "Stapellauf", en: "launching" },
+  DECLEV:  { de: "Senken des Wasserspiegels", en: "lowering water level" },
+  FLOMEA:  { de: "Strömungsmessung", en: "flow measurement" },
+  BLDWRK:  { de: "Bauarbeiten", en: "building work" },
+  REPAIR:  { de: "Reparaturarbeiten", en: "repair" },
+  INSPEC:  { de: "Inspektion", en: "inspection" },
+  FIRWRK:  { de: "Feuerwerk", en: "fireworks" },
+  LIMITA:  { de: "Einschränkungen", en: "limitations" },
+  CHGFWY:  { de: "Änderungen des Fahrwassers", en: "changes of the fairway" },
+  CONSTR:  { de: "Einengung des Fahrwassers", en: "constriction of fairway" },
+  DIVING:  { de: "Taucher unter Wasser", en: "diver under the water" },
+  SPECTR:  { de: "Sondertransport", en: "special transport" },
+  EXT:     { de: "extreme Dotierung", en: "extensive sluicing" },
+  MIN:     { de: "minimale Dotierung", en: "minimum sluicing" },
+  SOUND:   { de: "Peilarbeiten", en: "sounding works" },
+  OTHER:   { de: "andere", en: "others" },
+  INFSER:  { de: "Informationsservice", en: "info service" },
+  STRIKE:  { de: "Streik", en: "strike" },
+  FLOMAT:  { de: "Treibgut", en: "floating material" },
+  EXPLOS:  { de: "Bombenräumung", en: "explosives clearing operation" },
+  OBUNWA:  { de: "Einschränkung unter Wasser", en: "obstruction under water" },
+  FALMAT:  { de: "herabfallende Gegenstände", en: "falling material" },
+  DAMMAR:  { de: "beschädigte Zeichen", en: "damaged marks/signs" },
+  HEARIS:  { de: "Gesundheitsgefahr", en: "health risk" },
+  ICE:     { de: "Eis", en: "ice" },
+  OBSTAC:  { de: "Schifffahrtshindernis", en: "obstacle" },
+  CHGMAR:  { de: "Schifffahrtszeichen geändert", en: "change marks" },
+  HIGVOL:  { de: "Hochspannungsleitung", en: "high voltage cable" },
+  ECDISU:  { de: "Inland ECDIS Update", en: "Inland ECDIS update" },
+  LOCRUL:  { de: "lokal gültige Verkehrsvorschriften", en: "local rules of traffic" },
+  NEWOBJ:  { de: "neues Objekt", en: "new object" },
+  MISECH:  { de: "Geisterechos", en: "false radar echos" },
+  VHFCOV:  { de: "Funkabdeckung", en: "radio coverage" },
+  REMOBJ:  { de: "Bergungsarbeiten", en: "removal of object" },
+  LEVRIS:  { de: "steigender Wasserstand", en: "rising water level" },
+  SPCMAR:  { de: "besondere Zeichen", en: "special marks" },
+  WERMCO:  { de: "Wetterbedingungen", en: "weather conditions" }
+};
+
 const intervalMap = {
   CON: { en: "continuous", de: "durchgehend" },
   DAY: { en: "daily", de: "täglich" },
@@ -189,16 +239,6 @@ function movePointEast(lat, lon, meters) {
   return [lat, lon + deltaLon, ];
 }
 
-function formatDateForOpenCPN(dateString, languageIsGerman) {
-  if (!dateString) return '';
-  const d = new Date(dateString);
-  if (!isFinite(d)) return '';
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  const separator = languageIsGerman ? '.' : '/';
-  return `${day}${separator}${month}${separator}${year}`;
-}
 
 function formatDateISO(dateString) {
   if (!dateString) return '';
@@ -268,7 +308,7 @@ function formatDirectionCode(directionCode, lat, lon, detailUrl, app, languageIs
   }
 }
 
-function getLimitationCode(codeText, limitationCode, lat, lon, detailUrl, app, languageIsGerman) {
+function getLimitationCode(limitationCode, lat, lon, detailUrl, app, languageIsGerman) {
   const lang = languageIsGerman ? 'de' : 'en';
   let type = "";
 
@@ -289,11 +329,44 @@ function getLimitationCode(codeText, limitationCode, lat, lon, detailUrl, app, l
 
       if (languageIsGerman) {
         app.debug(
-          `Unbekannter ${codeText}: ${limitationCode}${coordsText} URL: ${detailUrl}`
+          `Unbekannter limitationcode: ${limitationCode}${coordsText} URL: ${detailUrl}`
         );
       } else {
         app.debug(
-          `Unknown ${codeText}: ${limitationCode}${coordsText} URL: ${detailUrl}`
+          `Unknown limitationcode: ${limitationCode}${coordsText} URL: ${detailUrl}`
+        );
+      }
+    }
+  }
+  return type;
+}
+
+function getReaseonCode(reasonCode, lat, lon, detailUrl, app, languageIsGerman) {
+  const lang = languageIsGerman ? 'de' : 'en';
+  let type = "";
+
+  if (reasonCode) {
+    if (reasonCodeLabels[reasonCode]) {
+      // Sprache auswählen: "de" oder "en"
+      type = reasonCodeLabels[reasonCode][lang];
+    } else {
+      type = reasonCode + " - " + (languageIsGerman ? "UNBEKANNT" : "UNKNOWN");
+
+      // Koordinaten nur ausgeben, wenn beide Werte vorhanden sind
+      let coordsText = "";
+      if (lat !== null && lon !== null && typeof lat === "number" && typeof lon === "number") {
+        coordsText = languageIsGerman
+          ? `, Koordinaten: ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+          : `, Coordinates: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      }
+
+      if (languageIsGerman) {
+        app.debug(
+          `Unbekannter reasoncode: ${reasonCode}${coordsText} URL: ${detailUrl}`
+        );
+      } else {
+        app.debug(
+          `Unknown reasoncode: ${reasonCode}${coordsText} URL: ${detailUrl}`
         );
       }
     }
@@ -429,7 +502,7 @@ function createBlockages(target, details, validUntilMs, detailUrl, app, language
             lim.limitationPeriods.forEach((period) => {
               const startDate = (period.startDate ?? 0)+ (period.startTimeMs ?? 0);
               const endDate = (period.endDate ?? 0) + (period.endTimeMs ?? 0);
-              isRelevant = (endDate === 0 || endDate>= Date.now())
+              isRelevant = (endDate === 0 || endDate>= Date.now() || ((period.endDate ?? 0)===0 && (period.endTimeMs ?? 0)!=0))
               if (isRelevant) {
                 const pushPeriod = {
                   startDate: period.startDate
@@ -469,7 +542,7 @@ function createBlockages(target, details, validUntilMs, detailUrl, app, language
       const newBericht = {};
       newBericht.bericht = bericht.replace(',', '-');
       if (details.reasonCode) {
-        newBericht.reasonCode = getLimitationCode('reasonCode', details.reasonCode, lat, lon, detailUrl, app, languageIsGerman);
+        newBericht.reasonCode = getReaseonCode( details.reasonCode, lat, lon, detailUrl, app, languageIsGerman);
       }
       if (record.lim.limitationCode) {
         newBericht.status = record.lim.limitationCode;
@@ -573,11 +646,6 @@ function formatIndicationCode(indicationCode, lat, lon, detailUrl, app, language
   }
 }
 
-function formatDescription(locationGroup, app, languageIsGerman) {
-  const lat = locationGroup.lat ?? null;
-  const lon = locationGroup.lon ?? null;
-  const berichtValues = Object.values(locationGroup.berichte);
-
 function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
   if (!ms) return "";
 
@@ -604,6 +672,10 @@ function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
   return `${localDate.toLocaleDateString(locale, weekdayOpts)} ${localDate.toLocaleDateString(locale, dateOpts)}`;
 }
 
+function formatDescription(locationGroup, app, languageIsGerman) {
+  const lat = locationGroup.lat ?? null;
+  const lon = locationGroup.lon ?? null;
+  const berichtValues = Object.values(locationGroup.berichte);
 
   // Prüfen, ob Start- und Enddatum derselbe lokale Tag sind
   const isSameLocalDay = (aMs, aHasTime, bMs, bHasTime,languageIsGerman) => {
@@ -618,7 +690,7 @@ function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
     const blockagesText = berichtGroup.blockages.map((blockage) => {
       let limitationText=""
       if (blockage.limitationCode && blockage.limitationCode!=limitationCode){
-        let type = getLimitationCode('limitationCode', blockage.limitationCode, lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
+        let type = getLimitationCode(blockage.limitationCode, lat, lon, berichtGroup.detailUrl, app, languageIsGerman);
         if (type && type !== "") {
           limitationText= ` -- ${type}: -- `;
         }
@@ -626,14 +698,16 @@ function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
       }
       const startDateLocal = (blockage.startDate ?? 0) + (blockage.startTimeMs ?? 0);
       const endDateLocal   = (blockage.endDate ?? 0)   + (blockage.endTimeMs ?? 0);
+      const hasEndDate   = blockage.endDate !== undefined;
       const hasStartTime = blockage.startTimeMs !== undefined;
       const hasEndTime   = blockage.endTimeMs   !== undefined;
+      
 
       const dateStr    = startDateLocal!=0 ? formatDate(startDateLocal,hasStartTime,languageIsGerman) : "";
-      const endDateStr = endDateLocal!=0   ? formatDate(endDateLocal,hasEndTime,languageIsGerman) : "";
+      const endDateStr = endDateLocal!=0   ? formatDate(endDateLocal+(!hasEndDate?blockage.startDate:0),hasEndTime,languageIsGerman) : "";
 
       const startTime = hasStartTime ? formatDate(startDateLocal,hasStartTime,languageIsGerman,true) : "";
-      const endTime   = hasEndTime   ? formatDate(endDateLocal,hasEndTime,languageIsGerman,true)   : "";
+      const endTime   = hasEndTime   ? formatDate(endDateLocal+(!hasEndDate?blockage.startDate:0),hasEndTime,languageIsGerman,true)   : "";
 
       let tgText = "";
       if (Array.isArray(blockage.targetGroups) && blockage.targetGroups.length > 0) {
@@ -666,8 +740,6 @@ function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
       const extra = extraParts.length ? ` (${extraParts.join(" ")})` : "";
 
       const interval = getIntervalCode('interval', blockage.interval, lat, lon, blockage.detailUrl, app, languageIsGerman);
-
-      const hasEndDate = !!endDateLocal;
       const sameDay = isSameLocalDay(startDateLocal,hasStartTime, endDateLocal,hasEndTime);
 
       let text = "";
@@ -718,32 +790,67 @@ function formatDate(ms, hasTime, languageIsGerman, toTime = false) {
   return texts.join(" ");
 }
 
+function transformDetailUrl(original) {
+  const apiPrefix = "https://vaarweginformatie.nl/frp/api/messages/";
+  const mainPrefix = "https://vaarweginformatie.nl/frp/main/#/nts/";
 
+  if (!original.startsWith(apiPrefix)) return original;
+
+  const rest = original.slice(apiPrefix.length);
+  const firstSlash = rest.indexOf("/");
+  if (firstSlash === -1) return original;
+
+  const partToUpper = rest.slice(0, firstSlash).toUpperCase();
+  const remainder   = rest.slice(firstSlash);
+
+  return mainPrefix + partToUpper + remainder;
+}
 
 // Generiere GPX für Routes
 function generateRoutesGPX(routes, colorHex, languageIsGerman) {
   let gpx = `<?xml version="1.0"?>\n<gpx version="1.1" creator="OpenCPN" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/GpxExtensionsv3.xsd http://www8.garmin.com/xmlschemas/GpxExtensionsv3.xsd" xmlns:opencpn="http://www.opencpn.org">\n`;
 
   routes.forEach(route => {
-    const startDateFormatted = formatDateForOpenCPN(route.startDate, languageIsGerman);
-    const endDateFormatted = route.endDate ? formatDateForOpenCPN(route.endDate, languageIsGerman) : '';
-    const startISO = formatDateISO(route.startDate);
-
-    // Bestimme "bis" oder "to" Text
-    let endText = '';
-    if (route.endDate) {
-      endText = languageIsGerman ? `bis ${endDateFormatted}` : `to ${endDateFormatted}`;
+    const ersterBlockage = Object.values(route.berichte)[0].blockages[0];
+    const totalBlockages = Object.values(route.berichte).reduce((sum, bericht) => sum + bericht.blockages.length, 0)
+    const start = (ersterBlockage.startDate ?? 0)+(ersterBlockage.startTimeMs ?? 0);
+    const end = (ersterBlockage.endDate ?? 0)+(ersterBlockage.endTimeMs ?? 0);
+    let startText=totalBlockages>1?languageIsGerman?'nächste ':'next ':'';
+    startText+=languageIsGerman?'ab: ':'from: '
+    startText+=formatDate(start,(ersterBlockage.startTimeMs ?? 0)!=0,languageIsGerman,false)
+    startText+=(ersterBlockage.startTimeMs ?? 0)!=0?' '+formatDate(start,(ersterBlockage.startTimeMs ?? 0)!=0,languageIsGerman,true):''
+    let endText='';
+    if (end===0){
+      endText=languageIsGerman?'bis auf weiteres':'until further notice';
+    }else{
+      endText+=totalBlockages>1?languageIsGerman?'nächste ':'next ':'';
+      endText+=languageIsGerman?'bis: ':'until: ';
+      endText+=formatDate(end,(ersterBlockage.startTimeMs ?? 0)!=0,languageIsGerman,false)
+      endText+=(ersterBlockage.endTimeMs ?? 0)!=0?' '+formatDate(end,(ersterBlockage.endTimeMs ?? 0)!=0,languageIsGerman,true):''
     }
+    endText=escapeXml(endText);
+    startText=escapeXml(startText);
+    const startISO = formatDateISO(start+3600000);
 
-    gpx += `  <rte>\n    <name>${escapeXml(route.name)}</name>\n    <extensions>\n      <opencpn:start>${startDateFormatted}</opencpn:start>\n      <opencpn:end>${endText}</opencpn:end>\n      <opencpn:planned_departure>${startISO}</opencpn:planned_departure>\n      <opencpn:time_display>GLOBAL SETTING</opencpn:time_display>\n      <opencpn:style style="100" />\n      <gpxx:RouteExtension>\n        <gpxx:IsAutoNamed>false</gpxx:IsAutoNamed>\n        <gpxx:DisplayColor>Red</gpxx:DisplayColor>\n      </gpxx:RouteExtension>\n    </extensions>\n`;
+    gpx += `  <rte>\n    <name>${escapeXml(route.name)}</name>\n    `;
+    let links='';
+    Object.values(route.berichte).forEach((bericht) => {
+      links+=`<link href="${escapeXml(transformDetailUrl(bericht.detailUrl))}">\n      <text>${languageIsGerman?'Details siehe Bericht Nr. ':'details see report no. '}${escapeXml(bericht.bericht)}</text>\n    </link>\n    `
+    });
+    gpx += links;
+    gpx += `<desc>${route.description}</desc>\n    `
+    gpx += `<extensions>\n      <opencpn:start>${startText}</opencpn:start>\n      <opencpn:end>${endText}</opencpn:end>\n      <opencpn:planned_departure>${startISO}</opencpn:planned_departure>\n      <opencpn:time_display>GLOBAL SETTING</opencpn:time_display>\n      <opencpn:style style="100" />\n      <gpxx:RouteExtension>\n        <gpxx:IsAutoNamed>false</gpxx:IsAutoNamed>\n        <gpxx:DisplayColor>Red</gpxx:DisplayColor>\n      </gpxx:RouteExtension>\n    </extensions>\n`;
 
     // Waypoints der Route
     route.coordinates.forEach((coord, index) => {
       const [lon, lat] = coord;
       const isFirstOrLast = index === 0 || index === route.coordinates.length - 1;
       const sym = isFirstOrLast ? '1st-Active-Waypoint' : 'Symbol-Diamond-Red';
-
-      gpx += `    <rtept lat="${lat}" lon="${lon}">\n      <time>${startISO}</time>\n      <name>${index + 1}</name>\n      <sym>${sym}</sym>\n      <type>WPT</type>\n      <extensions>\n        <opencpn:waypoint_range_rings visible="false" number="0" step="1" units="0" colour="${colorHex}" />\n        <opencpn:scale_min_max UseScale="false" ScaleMin="2147483646" ScaleMax="0" />\n      </extensions>\n    </rtept>\n`;
+      gpx += `    <rtept lat="${lat}" lon="${lon}">\n      <time>${startISO}</time>\n      `
+      gpx += `<name>${route.name}-${index + 1}</name>\n      `
+      gpx += `<desc>${route.description}</desc>\n    `
+      gpx += links;
+      gpx += `<sym>${sym}</sym>\n      <type>WPT</type>\n      <extensions>\n        <opencpn:waypoint_range_rings visible="false" number="0" step="1" units="0" colour="${colorHex}" />\n        <opencpn:scale_min_max UseScale="false" ScaleMin="2147483646" ScaleMax="0" />\n      </extensions>\n    </rtept>\n`;
     });
 
     gpx += `  </rte>\n`;
@@ -770,7 +877,11 @@ function generateWaypointsGPX(points, languageIsGerman) {
     const name = escapeXml(point.properties && point.properties.name);
     const desc = escapeXml(point.properties && point.properties.description);
 
-    gpx += `  <wpt lat="${lat}" lon="${lon}">\n    <name>${name}</name>\n    <desc>${desc}</desc>\n    <sym>Symbol-X-Large-Red</sym>\n    <extensions>\n      <opencpn:scale_min_max UseScale="True" ScaleMin="160000" ScaleMax="0"></opencpn:scale_min_max>\n    </extensions>\n  </wpt>\n`;
+    gpx += `  <wpt lat="${lat}" lon="${lon}">\n    <name>${name}</name>\n    `
+    Object.values(point.properties.berichte).forEach((bericht) => {
+        gpx+=`<link href="${escapeXml(transformDetailUrl(bericht.detailUrl))}">\n      <text>${languageIsGerman?'Details siehe Bericht Nr. ':'details see report no. '}${escapeXml(bericht.bericht)}</text>\n    </link>\n    `
+    });
+    gpx += `<desc>${desc}</desc>\n    <sym>Symbol-X-Large-Red</sym>\n    <extensions>\n      <opencpn:scale_min_max UseScale="True" ScaleMin="160000" ScaleMax="0"></opencpn:scale_min_max>\n    </extensions>\n  </wpt>\n`;
   });
 
   gpx += `</gpx>`;

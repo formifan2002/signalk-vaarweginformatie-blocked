@@ -193,3 +193,5 @@ formifan2002
 ### Version 1.0.1
 - Optimization/enhancement of GPX file output
 - minor bug corrections
+### Version 1.0.2
+ - Changed to "Embedded Plugin Configuration Forms"

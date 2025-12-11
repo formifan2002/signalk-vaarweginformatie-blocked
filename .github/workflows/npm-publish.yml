@@ -1,11 +1,16 @@
-name: Manual npm Publish
+name: Publish to npm (Trusted Publisher)
 
 on:
-  workflow_dispatch:   # nur manuell auslösbar
+  workflow_dispatch:   # manuell auslösbar
+  push:
+    tags:
+      - 'v*'           # optional: automatisch bei neuen Versionstags
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # wichtig: erlaubt GitHub, ein OIDC-Token für npm zu erzeugen
     steps:
       - uses: actions/checkout@v4
 
@@ -14,8 +19,8 @@ jobs:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
 
+      - run: npm install -g npm@latest   # sicherstellen, dass npm >= 11.5.1
       - run: npm ci
+      - run: npm run build --if-present
 
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public

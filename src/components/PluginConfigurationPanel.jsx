@@ -68,6 +68,11 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
       routesHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Wasserwegen für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
       waypointsPath: "Dateiname gesperrte Schleusen und Brücken:",
       waypointsHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Schleusen und Brücken für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
+      inputDirectory: "Input-Verzeichnis:",
+      inputDirectoryHelp: "Verzeichnis für Eingabedateien",
+      timeframeStart: "Zeitrahmen Start:",
+      timeframeEnd: "Zeitrahmen Ende:",
+      timeframeHelp: "Zeitraum für die Datenabfrage",
       moveMeters: "Punktverschiebung (m):",
       moveHelp: "Punktverschiebung nach rechts in Metern (zur Vermeidung von Überlagerungen)",
       pointSize: "Punktgröße:",
@@ -79,7 +84,8 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
       unsavedWarning: "Es gibt ungespeicherte Änderungen. Wirklich abbrechen?",
       unsavedTitle: "Ungespeicherte Änderungen",
       yes: "Ja",
-      no: "Nein"
+      no: "Nein",
+      selectDirectory: "Verzeichnis wählen"
     },
     en: {
       title: "Configuration 'signalk-vaarweginformatie-blocked'",
@@ -97,6 +103,11 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
       routesHelp: "Path + filename of GPX file with blocked waterways for OpenCPN (as permanent layer). No file generation if field is empty",
       waypointsPath: "Filename blocked locks and bridges:",
       waypointsHelp: "Path + filename of GPX file with blocked locks and bridges for OpenCPN (as permanent layer). No file generation if field is empty",
+      inputDirectory: "Input Directory:",
+      inputDirectoryHelp: "Directory for input files",
+      timeframeStart: "Timeframe start:",
+      timeframeEnd: "Timeframe end:",
+      timeframeHelp: "Time range for data query",
       moveMeters: "Move point (m):",
       moveHelp: "Point offset to the right in meters (to avoid overlaps)",
       pointSize: "Point size:",
@@ -108,7 +119,8 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
       unsavedWarning: "There are unsaved changes. Really cancel?",
       unsavedTitle: "Unsaved changes",
       yes: "Yes",
-      no: "No"
+      no: "No",
+      selectDirectory: "Select Directory"
     }
   };
 
@@ -163,10 +175,52 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
     input.onchange = (e) => {
       const file = e.target.files[0];
       if (file) {
-        const fullPath = file.path || file.webkitRelativePath || `/path/to/${file.name}`;
+        // Versuche den vollständigen Pfad zu erhalten
+        let fullPath = file.path || '';
+        
+        // Fallback für Browser ohne file.path Support
+        if (!fullPath && file.name) {
+          fullPath = file.name;
+        }
+        
         handleConfigChange(inputId === 'routesPath' ? 'openCpnGeoJsonPathRoutes' : 'openCpnGeoJsonPathWaypoints', fullPath);
       }
     };
+    input.click();
+  };
+
+  const handleDirectorySelect = () => {
+    // In einer Web-Umgebung können wir nur den Verzeichnisnamen aus dem relativen Pfad extrahieren
+    // Für echte Verzeichnisauswahl wird eine native Integration (Electron/Node) benötigt
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.webkitdirectory = true;
+    input.directory = true;
+    input.multiple = true;
+    
+    input.onchange = (e) => {
+      const files = e.target.files;
+      if (files.length > 0) {
+        // Extrahiere das Verzeichnis aus dem ersten Datei-Pfad
+        const firstFile = files[0];
+        let directoryPath = '';
+        
+        if (firstFile.webkitRelativePath) {
+          // Format: "verzeichnis/datei.txt" -> "verzeichnis"
+          const parts = firstFile.webkitRelativePath.split('/');
+          directoryPath = parts.slice(0, -1).join('/') || parts[0];
+        } else if (firstFile.path) {
+          // Node/Electron Umgebung
+          const parts = firstFile.path.split(/[/\\]/);
+          directoryPath = parts.slice(0, -1).join('/');
+        }
+        
+        if (directoryPath) {
+          handleConfigChange('inputDirectory', directoryPath);
+        }
+      }
+    };
+    
     input.click();
   };
 
@@ -174,6 +228,15 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
 
   return (
     <div style={styles.container}>
+      <div style={styles.header}>
+        <button 
+          onClick={() => window.open('https://github.com/formifan2002/signalk-vaarweginformatie-blocked', '_blank')}
+          style={styles.helpButton}
+        >
+          ℹ️ {currentLang === 'de' ? 'Hilfe' : 'Help'}
+        </button>
+      </div>
+
       <div style={styles.section}>
         <h3 style={styles.sectionTitle}>{t.generalLegend}</h3>
         <div style={styles.formGroup}>
@@ -240,20 +303,69 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
         </div>
 
         <div style={styles.formGroup}>
+          <label style={styles.label}>{t.inputDirectory}</label>
+          <div style={styles.inputWithButton}>
+            <input
+              type="text"
+              value={config.inputDirectory || ''}
+              onChange={(e) => handleConfigChange('inputDirectory', e.target.value)}
+              style={styles.inputPath}
+              placeholder="/path/to/directory"
+            />
+            <button
+              type="button"
+              onClick={handleDirectorySelect}
+              style={styles.fileButton}
+            >
+              📁
+            </button>
+          </div>
+          <small style={styles.help}>{t.inputDirectoryHelp}</small>
+        </div>
+
+        <div style={styles.formGroup}>
+          <label style={styles.label}>{t.timeframeStart}</label>
+          <div style={styles.timeInputWrapper}>
+            <span style={styles.clockIcon}>🕐</span>
+            <input
+              type="time"
+              value={config.timeframeStart || '00:00'}
+              onChange={(e) => handleConfigChange('timeframeStart', e.target.value)}
+              style={styles.timeInput}
+            />
+          </div>
+          <small style={styles.help}>{t.timeframeHelp}</small>
+        </div>
+
+        <div style={styles.formGroup}>
+          <label style={styles.label}>{t.timeframeEnd}</label>
+          <div style={styles.timeInputWrapper}>
+            <span style={styles.clockIcon}>🕐</span>
+            <input
+              type="time"
+              value={config.timeframeEnd || '23:59'}
+              onChange={(e) => handleConfigChange('timeframeEnd', e.target.value)}
+              style={styles.timeInput}
+            />
+          </div>
+          <small style={styles.help}>{t.timeframeHelp}</small>
+        </div>
+
+        <div style={styles.formGroup}>
           <label style={styles.label}>{t.routesPath}</label>
           <div style={styles.inputWithButton}>
             <input
               type="text"
               value={config.openCpnGeoJsonPathRoutes || ''}
               onChange={(e) => handleConfigChange('openCpnGeoJsonPathRoutes', e.target.value)}
-              style={styles.input}
+              style={styles.inputPath}
             />
             <button
               type="button"
               onClick={() => handleFileSelect('routesPath')}
               style={styles.fileButton}
             >
-              📁
+              📄
             </button>
           </div>
           <small style={styles.help}>{t.routesHelp}</small>
@@ -266,14 +378,14 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
               type="text"
               value={config.openCpnGeoJsonPathWaypoints || ''}
               onChange={(e) => handleConfigChange('openCpnGeoJsonPathWaypoints', e.target.value)}
-              style={styles.input}
+              style={styles.inputPath}
             />
             <button
               type="button"
               onClick={() => handleFileSelect('waypointsPath')}
               style={styles.fileButton}
             >
-              📁
+              📄
             </button>
           </div>
           <small style={styles.help}>{t.waypointsHelp}</small>
@@ -382,6 +494,14 @@ const styles = {
     padding: '20px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
   },
+  header: {
+    display: 'flex',
+    justifyContent: 'flex-end', 
+    alignItems: 'center',
+    marginBottom: '10px',
+    paddingBottom: '5px',
+    width: '100%',            
+  },
   section: {
     marginBottom: '30px',
   },
@@ -407,7 +527,37 @@ const styles = {
     border: '1px solid #ddd',
     borderRadius: '4px',
     fontSize: '1em',
-    width: '200px',
+    width: '80px',
+  },
+  inputPath: {
+    padding: '8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '1em',
+    width: '400px',
+  },
+  timeInputWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 12px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    backgroundColor: '#fff',
+    width: 'fit-content',
+  },
+  clockIcon: {
+    color: '#667eea',
+    fontSize: '18px',
+    flexShrink: 0,
+  },
+  timeInput: {
+    border: 'none',
+    outline: 'none',
+    fontSize: '1em',
+    fontFamily: 'monospace',
+    padding: '0',
+    width: '90px',
   },
   colorInput: {
     width: '60px',
@@ -427,6 +577,7 @@ const styles = {
     alignItems: 'center',
     marginBottom: '8px',
     cursor: 'pointer',
+    gap: '6px',
   },
   areasGrid: {
     display: 'grid',
@@ -518,6 +669,17 @@ const styles = {
     gap: '10px',
     justifyContent: 'flex-end',
     marginTop: '20px',
+  },
+  helpButton: {
+    padding: '8px 16px',
+    backgroundColor: '#667eea',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    fontSize: '0.95em',
+    transition: 'background 0.3s',
   }
 };
 

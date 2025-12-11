@@ -14,6 +14,7 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 - Filterung nach Datum/Zeitraum
 - Suchfunktion für Sperrungen
 - Ein-/Ausblenden von Wasserwegen und Sperrungen
+- Nur Kartenanzeige (ohne Plugin-Konfiguration) mit http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk-vaarweginformatie-blocked/?mode=map
 
 ### 📡 SignalK Integration
 - Bereitstellung als SignalK Resource Sets
@@ -23,7 +24,7 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 
 ### 🧭 OpenCPN Support
 - Automatische Generierung von GPX-Dateien
-- Separate Dateien für Routen (Wasserwege) und Waypoints (Objekte)
+- Separate Dateien für Routen (Wasserwege) und Waypoints (Objekte) durch z.B. permanente Layer
 - Farbcodierung und Symbolik für optimale Sichtbarkeit
 
 ### 🌍 Mehrsprachigkeit
@@ -56,8 +57,9 @@ Nach der Installation starte den SignalK Server neu.
 ## Konfiguration
 
 ### Zugriff auf die Konfiguration
-- **Web-Interface**: Öffne `http://your-signalk-server:3000/plugins/signalk-vaarweginformatie-blocked/`
+- **Web-Interface**: Öffne `http://<SIGNALK_IP>:<SIGNALK_PORT>/plugins/signalk-vaarweginformatie-blocked/`
 - **SignalK Admin**: Server → Plugin Config → Vaarweginformatie BLOCKED
+- **SignalK Admin**: Server → WebApps → Vaarweginformatie BLOCKED
 
 ### Konfigurationsoptionen
 
@@ -91,16 +93,17 @@ Wähle die zu überwachenden Gebiete:
 
 #### Parameter
 - **Abfrageintervall** (Stunden): Wie oft neue Daten abgerufen werden (Standard: 24)
-- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft geprüft werden (1-60, Standard: 7)
-- **Punktverschiebung** (Meter): Versetzt Punkte nach Osten für bessere Sichtbarkeit (Standard: 5)
+- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von vaarweginformatie.nl abgerufen werden (1-60, Standard: 7)
+- **Punktverschiebung** (Meter): Versetzt Punkte nach Osten für bessere Sichtbarkeit und Vermeidung von Überschneidungen (Standard: 5)
 - **Punktgröße**: Radius der Marker auf der Karte (Standard: 10)
-- **Farbe**: Hex-Farbcode für Marker und Linien (Standard: #FF0000)
+- **Farbe**: Hex-Farbcode für Marker in Freeboard-SK und OpenCPN sowie Linien in OpenCPN (Standard: #FF0000)
 
 #### OpenCPN Integration
 - **Routen-GPX-Pfad**: Vollständiger Pfad zur GPX-Datei für gesperrte Wasserwege
   - Beispiel: `/home/user/.opencpn/routes_blocked.gpx`
 - **Waypoints-GPX-Pfad**: Vollständiger Pfad zur GPX-Datei für gesperrte Objekte
   - Beispiel: `/home/user/.opencpn/waypoints_blocked.gpx`
+- Navigiere zu **Werkzeuge** → **Route & Mark-Manager** → **Layer**  → **Dauerhaftes Layer erstellen**
 
 ## Nutzung
 
@@ -109,7 +112,7 @@ Wähle die zu überwachenden Gebiete:
 #### Konfigurationsansicht
 - Ändere Einstellungen über das Formular
 - Klicke auf **Speichern** um Änderungen zu übernehmen
-- **Neustart**: Startet das Plugin neu (nur wenn aktiviert)
+- **Neustart**: Startet das Plugin neu (nur wenn Plugin aktiviert ist)
 - **Zurück**: Kehrt zur vorherigen Seite zurück (mit Warnung bei ungespeicherten Änderungen)
 
 #### Kartenansicht
@@ -130,8 +133,8 @@ Wähle die zu überwachenden Gebiete:
 
 ### Freeboard-SK Integration
 1. Öffne Freeboard-SK
-2. Navigiere zu **Ressourcen**
-3. Die Sperrungen erscheinen automatisch unter "Sperrungen" oder "Closures"
+2. Navigiere in den **Settings** zu **Ressourcen**
+3. Die Sperrungen erscheinen automatisch unter **Custom Resoures** als "Sperrungen" oder "Closures" (je nach Spracheinstellung im Plugin)
 4. Gesperrte Wasserwege erscheinen unter "Routes"
 
 ### OpenCPN Integration

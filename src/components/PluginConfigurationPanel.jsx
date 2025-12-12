@@ -302,56 +302,7 @@ const PluginConfigurationPanel = ({ configuration, save }) => {
           <small style={styles.help}>{t.daysHelp}</small>
         </div>
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.inputDirectory}</label>
-          <div style={styles.inputWithButton}>
-            <input
-              type="text"
-              value={config.inputDirectory || ''}
-              onChange={(e) => handleConfigChange('inputDirectory', e.target.value)}
-              style={styles.inputPath}
-              placeholder="/path/to/directory"
-            />
-            <button
-              type="button"
-              onClick={handleDirectorySelect}
-              style={styles.fileButton}
-            >
-              📁
-            </button>
-          </div>
-          <small style={styles.help}>{t.inputDirectoryHelp}</small>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.timeframeStart}</label>
-          <div style={styles.timeInputWrapper}>
-            <span style={styles.clockIcon}>🕐</span>
-            <input
-              type="time"
-              value={config.timeframeStart || '00:00'}
-              onChange={(e) => handleConfigChange('timeframeStart', e.target.value)}
-              style={styles.timeInput}
-            />
-          </div>
-          <small style={styles.help}>{t.timeframeHelp}</small>
-        </div>
-
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.timeframeEnd}</label>
-          <div style={styles.timeInputWrapper}>
-            <span style={styles.clockIcon}>🕐</span>
-            <input
-              type="time"
-              value={config.timeframeEnd || '23:59'}
-              onChange={(e) => handleConfigChange('timeframeEnd', e.target.value)}
-              style={styles.timeInput}
-            />
-          </div>
-          <small style={styles.help}>{t.timeframeHelp}</small>
-        </div>
-
-        <div style={styles.formGroup}>
+         <div style={styles.formGroup}>
           <label style={styles.label}>{t.routesPath}</label>
           <div style={styles.inputWithButton}>
             <input
@@ -535,29 +486,6 @@ const styles = {
     borderRadius: '4px',
     fontSize: '1em',
     width: '400px',
-  },
-  timeInputWrapper: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    backgroundColor: '#fff',
-    width: 'fit-content',
-  },
-  clockIcon: {
-    color: '#667eea',
-    fontSize: '18px',
-    flexShrink: 0,
-  },
-  timeInput: {
-    border: 'none',
-    outline: 'none',
-    fontSize: '1em',
-    fontFamily: 'monospace',
-    padding: '0',
-    width: '90px',
   },
   colorInput: {
     width: '60px',

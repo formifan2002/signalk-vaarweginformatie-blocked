@@ -195,3 +195,5 @@ formifan2002
 - minor bug corrections
 ### Version 1.0.2
  - Changed to "Embedded Plugin Configuration Forms"
+### Version 1.0.3
+ - Minor bugfixes

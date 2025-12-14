@@ -249,7 +249,7 @@ module.exports = function(app) {
         "Noord-Brabant": { type: 'boolean', title: 'Nordbrabant (North Brabant / Noord-Brabant)', default: false },
         "Limburg": { type: 'boolean', title: 'Limburg (Limburg / Limburg)', default: false },
         pollIntervalHours: { type: 'number', title: 'Abfrageintervall in Stunden (Polling interval in hours)', default: 24 },
-        daysSpan: { type: 'number', title: 'Anzahl Tage (max 60) (Number of days)', default: 7 },
+        daysSpan: { type: 'number', title: 'Anzahl Tage (Number of days)', default: 120 },
         openCpnGeoJsonPathRoutes: { type: 'string', title: 'Pfad + Dateiname der GPX Datei mit gesperrten Strecken für OpenCpn (Path + filename of GPX file with closed routes for OpenCPN)' },
         openCpnGeoJsonPathWaypoints: { type: 'string', title: 'Pfad + Dateiname der GPX Datei mit gesperrten Objekten für OpenCpn (Path + filename of GPX file with closed objects for OpenCPN)' },
         movePointMeters: { type: 'number', title: 'Punktverschiebung in Metern (Point offset in meters)', default: 5 },

@@ -22,6 +22,7 @@ body {
   padding: 0.5em;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 999 !important;
 }
 
 .view-toggle button {
@@ -586,7 +587,7 @@ button[type='submit']:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   font-size: 0.9em;
   max-width: 300px;
-  z-index: 1000;
+  z-index: 400!important;
 }
 
 .map-info div {
@@ -623,4 +624,82 @@ ul {
 ul ul {
   margin-left: 0.5em;
   padding-left: 0.5em;
+}
+
+/* Leaflet Popup Anpassungen für Mobile */
+@media (max-width: 768px) {
+  .leaflet-popup-content-wrapper {
+    font-size: 1.1em !important;
+    min-width: 250px !important;
+    max-width: 90vw !important;
+  }
+  
+  .leaflet-popup-content {
+    margin: 1em !important;
+    line-height: 1.6 !important;
+  }
+  
+  .popup-content {
+    font-size: 1.1em;
+  }
+  
+  .popup-content strong {
+    font-size: 1.2em;
+    display: block;
+    margin-bottom: 0.5em;
+  }
+  
+  .popup-content ul {
+    margin-left: 1.2em;
+  }
+  
+  .popup-content li {
+    margin: 0.4em 0;
+  }
+}
+
+/* Leaflet Popup über allem anderen */
+.leaflet-popup {
+  z-index: 9999 !important;
+  margin-left: 20px !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 9999 !important;
+  margin-left: 20px !important;
+}
+
+/* Map-Info Box auf Mobile: kompakt und ausklappbar */
+@media (max-width: 768px) {
+  .map-info {
+    bottom: 10em !important;
+    left: 1em !important;
+    right: 1em !important;
+    max-width: none !important;
+    font-size: 0.85em;
+    padding: 0.8em;
+    max-height: 60vh;
+    overflow-y: auto;
+    transition: bottom 0.3s ease; /* Smooth transition */
+  }
+  
+  /* Eingeklappt: viel höher */
+  .map-info.collapsed {
+    bottom: calc(100vh - 5em) !important; /* Ganz oben, nur Header sichtbar */
+    max-height: 2.5em;
+    overflow: hidden;
+  }
+  
+  /* Toggle Button - ohne content (wird per JS gesetzt) */
+  .map-info::before {
+    display: block;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0.5em;
+    margin: -0.8em -0.8em 0.5em -0.8em;
+    background: #667eea;
+    color: white;
+    border-radius: 8px 8px 0 0;
+    text-align: center;
+  }
 }

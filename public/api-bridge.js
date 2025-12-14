@@ -2,7 +2,8 @@ class VaarweginformatieApiBridge {
   constructor() {
     this.configUrl = '/plugins/signalk-vaarweginformatie-blocked/config';
     this.restartUrl = '/plugins/signalk-vaarweginformatie-blocked/restart';
-    this.apiBase = `http://${window.location.hostname}:${window.location.port || '3000'}/signalk/v2/api/resources`;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    this.apiBase = `${window.location.protocol}//${window.location.hostname}${port}/signalk/v2/api/resources`;
   }
 
   async getConfig() {

@@ -115,7 +115,7 @@
           
           <div class="field-group">
             <span class="field-label" id="daysLabel"></span>
-            <input type="number" name="daysSpan" min="1" max="60">
+            <input type="number" name="daysSpan" min="1">
             <span class="field-help" id="daysHelp"></span>
           </div>
           
@@ -181,7 +181,7 @@
         <span id="mapClosuresCount">0</span>
       </div>
       <div style="margin-top:0.5em;">
-        <date-range-component maxDays="60"></date-range-component>
+        <date-range-component></date-range-component>
       </div>
       <div style="margin-top:0.5em;">
         <strong id="searchLabel">Suche:</strong>
@@ -198,7 +198,7 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>
   <!-- MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script type="module" src="date-range-component.js"></script>
+  <script type="module" src="date-range-component.js?v=2"></script>
   <script src="translations.js"></script>
   <script src="api-bridge.js"></script>
 
@@ -783,6 +783,15 @@
 
       mapLayers.waterways.addTo(mapInstance);
       mapLayers.closures.addTo(mapInstance);
+        // Verstecke map-info wenn Popup offen ist
+      mapInstance.on('popupopen', () => {
+        document.getElementById('mapInfo').style.display = 'none';
+      });
+
+      mapInstance.on('popupclose', () => {
+        document.getElementById('mapInfo').style.display = 'block';
+      });
+
     }
 
 	async function loadMapData() {
@@ -1164,14 +1173,14 @@ function transformDetailUrl(original) {
 		mapFilter = {
 		  start: start 
 			? (() => {
-				const d = flatpickr.parseDate(start, "d.m.Y");
+				const d = flatpickr.parseDate(start, "d.m.y");
 				d.setHours(0,0,0,0); // Tagesanfang
 				return d.getTime();
 			  })()
 			: null,
 		  end: end 
 			? (() => {
-				const d = flatpickr.parseDate(end, "d.m.Y");
+				const d = flatpickr.parseDate(end, "d.m.y");
 				d.setHours(23,59,59,999); // Tagesende
 				return d.getTime();
 			  })()
@@ -1214,7 +1223,7 @@ function transformDetailUrl(original) {
 	  document.getElementById('mapWaterwaysLabel').textContent = t.mapWaterwaysLabel;
 	  document.getElementById('mapClosuresLabel').textContent = t.mapClosuresLabel;
 
-    document.getElementById('searchLabel').textContent = t.searchLabel || 'Suche:';
+    document.getElementById('searchLabel').textContent = t.searchLabel+":" || 'Suche:';
     document.getElementById('searchInput').placeholder = t.searchPlaceholder || 'Name der Sperrung...';
 
     const comp = document.querySelector("date-range-component");
@@ -1222,11 +1231,48 @@ function transformDetailUrl(original) {
 	  comp.setAttribute("label-end", t.mapClosureEnd);
 	  comp.setAttribute("label-today", t.mapClosureToday);
 	  comp.setAttribute("label-all", t.mapClosureAll);
+    mapInfoBoxMobile();
+  }
 
-	}
-
-    // Initial setup
-    updateMapLabels();
+  function mapInfoBoxMobile() {
+      // Map-Info Box auf Mobile ausklappbar machen
+    if (window.innerWidth <= 768) {
+      const mapInfo = document.getElementById('mapInfo');
+      const searchLabel = document.getElementById('searchLabel');
+      
+      // Text dynamisch setzen basierend auf aktueller Sprache
+      function updateMapInfoHeader() {
+        const headerText = searchLabel.textContent
+        const arrow = mapInfo.classList.contains('collapsed') ? '▼' : '▲';
+        mapInfo.setAttribute('data-header', `${arrow} ${headerText}`);
+        
+        // CSS für ::before wird per Attribut gesetzt
+        const style = document.createElement('style');
+        style.textContent = `
+          @media (max-width: 768px) {
+            .map-info::before { content: "${arrow} ${headerText}"; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      mapInfo.classList.add('collapsed');
+      updateMapInfoHeader();
+      
+      mapInfo.addEventListener('click', (e) => {
+        if (e.target === mapInfo || e.target.tagName === 'DIV') {
+          mapInfo.classList.toggle('collapsed');
+          updateMapInfoHeader();
+        }
+      });
+      
+      languageSelect.addEventListener('change', updateMapInfoHeader);
+      
+    }
+  }
+  
+  // Initial setup
+  updateMapLabels();
 	startAutoMode();
 	
   </script>

@@ -34,7 +34,7 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 ### ⚙️ Flexible Konfiguration
 - Auswahl spezifischer Regionen in den Niederlanden
 - Konfigurierbare Abfrageintervalle
-- Anpassbare Zeitspannen (1-60 Tage)
+- Anpassbare Zeitspannen (1-n Tage)
 - Individuelle Farben und Punktgrößen
 - Punktverschiebung zur besseren Kartendarstellung
 
@@ -93,7 +93,7 @@ Wähle die zu überwachenden Gebiete:
 
 #### Parameter
 - **Abfrageintervall** (Stunden): Wie oft neue Daten abgerufen werden (Standard: 24)
-- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von vaarweginformatie.nl abgerufen werden (1-60, Standard: 7)
+- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von vaarweginformatie.nl abgerufen werden (Standard: 120)
 - **Punktverschiebung** (Meter): Versetzt Punkte nach Osten für bessere Sichtbarkeit und Vermeidung von Überschneidungen (Standard: 5)
 - **Punktgröße**: Radius der Marker auf der Karte (Standard: 10)
 - **Farbe**: Hex-Farbcode für Marker in Freeboard-SK und OpenCPN sowie Linien in OpenCPN (Standard: #FF0000)
@@ -197,3 +197,5 @@ formifan2002
  - Changed to "Embedded Plugin Configuration Forms"
 ### Version 1.0.3
  - Minor bugfixes
+ ### Version 1.0.4
+ - Adjustments for mobile map view

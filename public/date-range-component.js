@@ -25,7 +25,7 @@ template.innerHTML = `
       border: 1px solid #ccc;
       border-radius: 4px;
       font-size: 0.9rem;
-      width: 11ch;       /* exakt so breit wie nötig */
+      width: 9ch;
       box-sizing: content-box;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
@@ -66,11 +66,11 @@ template.innerHTML = `
   <div class="row">
     <div class="field">
       <label id="labelStart" for="startDate"></label>
-      <input id="startDate" size="10" placeholder="TT.MM.JJJJ" autocomplete="off">
+      <input id="startDate" size="10" placeholder="TT.MM.JJ" autocomplete="off">
     </div>
     <div class="field">
       <label id="labelEnd" for="endDate"></label>
-      <input id="endDate" size="10" placeholder="TT.MM.JJJJ" autocomplete="off">
+      <input id="endDate" size="10" placeholder="TT.MM.JJ" autocomplete="off">
     </div>
     <button id="rangeBtn">📅</button>
   </div>
@@ -117,7 +117,8 @@ class DateRangeComponent extends HTMLElement {
 
     // Flatpickr: Start
     this.fpStart = flatpickr(this.startInput, {
-      dateFormat: "d.m.Y",
+      disableMobile: true,  // ← NEU
+      dateFormat: "d.m.y",
       minDate: today,
       maxDate: maxDate,
       locale: "de",
@@ -125,7 +126,7 @@ class DateRangeComponent extends HTMLElement {
         const start = selectedDates[0] || null;
         this.fpEnd.set("minDate", start || today);
         if (start && this.endInput.value) {
-          const end = this.fpEnd.parseDate(this.endInput.value, "d.m.Y");
+          const end = this.fpEnd.parseDate(this.endInput.value, "d.m.y");
           if (end < start) this.fpEnd.clear();
         }
         this.validateAndEmit(today, maxDate, maxDays);
@@ -134,13 +135,14 @@ class DateRangeComponent extends HTMLElement {
 
     // Flatpickr: Ende
     this.fpEnd = flatpickr(this.endInput, {
-      dateFormat: "d.m.Y",
+      disableMobile: true,  // ← NEU
+      dateFormat: "d.m.y",
       minDate: today,
       maxDate: maxDate,
       locale: "de",
       onOpen: () => {
         if (this.startInput.value) {
-          const start = this.fpStart.parseDate(this.startInput.value, "d.m.Y");
+          const start = this.fpStart.parseDate(this.startInput.value, "d.m.y");
           if (start) this.fpEnd.set("minDate", start);
         } else {
           this.fpEnd.set("minDate", today);
@@ -155,8 +157,9 @@ class DateRangeComponent extends HTMLElement {
     this.shadowRoot.appendChild(hidden);
 
     this.fpRange = flatpickr(hidden, {
+      disableMobile: true,  // ← NEU
       mode: "range",
-      dateFormat: "d.m.Y",
+      dateFormat: "d.m.y",
       minDate: today,
       maxDate: maxDate,
       locale: "de",
@@ -210,8 +213,8 @@ class DateRangeComponent extends HTMLElement {
     const eVal = this.endInput.value;
     if (!sVal || !eVal) return;
 
-    const s = this.fpStart.parseDate(sVal, "d.m.Y");
-    const e = this.fpEnd.parseDate(eVal, "d.m.Y");
+    const s = this.fpStart.parseDate(sVal, "d.m.y");
+    const e = this.fpEnd.parseDate(eVal, "d.m.y");
     if (!s || !e) {
       this.status.textContent = "❌ Ungültiges Datum.";
       return;

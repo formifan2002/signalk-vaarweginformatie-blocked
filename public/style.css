@@ -14,15 +14,14 @@ body {
   position: fixed;
   top: 1em;
   right: 1em;
-  z-index: 999;
+  z-index: 999 !important;
   display: flex;
-  flex-direction: column; /* Buttons + Hinweis untereinander */
+  flex-direction: column;
   gap: 0.5em;
   background: white;
   padding: 0.5em;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 999 !important;
 }
 
 .view-toggle button {
@@ -47,7 +46,6 @@ body {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-
 .unsaved-warning {
   background: #fff3cd;
   color: #856404;
@@ -58,15 +56,15 @@ body {
   font-weight: 500;
   text-align: center;
   max-width: 280px;
-  width: 100%;        /* passt sich an den Container an */
+  width: 100%;
   box-sizing: border-box;
 }
 
 /* Tablet */
 @media (max-width: 768px) {
   .unsaved-warning {
-    max-width: 100%;   /* volle Breite innerhalb der Box */
-    font-size: 0.85em; /* etwas kleinere Schrift */
+    max-width: 100%;
+    font-size: 0.85em;
   }
 }
 
@@ -75,10 +73,9 @@ body {
   .unsaved-warning {
     max-width: 100%;
     font-size: 0.8em;
-    padding: 0.6em;    /* kompaktere Abstände */
+    padding: 0.6em;
   }
 }
-
 
 .config-view {
   padding: 2em;
@@ -587,7 +584,7 @@ button[type='submit']:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   font-size: 0.9em;
   max-width: 300px;
-  z-index: 400!important;
+  z-index: 400 !important;
 }
 
 .map-info div {
@@ -661,12 +658,36 @@ ul ul {
 /* Leaflet Popup über allem anderen */
 .leaflet-popup {
   z-index: 9999 !important;
-  margin-left: 20px !important;
+  margin-left: 50px !important;
 }
 
 .leaflet-popup-pane {
   z-index: 9999 !important;
-  margin-left: 20px !important;
+}
+
+/* Vessel Marker Styling */
+.vessel-marker {
+  background: none;
+  border: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+/* Größeres Schließen-X für Popups */
+.leaflet-popup-close-button {
+  width: 30px !important;
+  height: 30px !important;
+  font-size: 24px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .leaflet-popup-close-button {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 28px !important;
+    line-height: 34px !important;
+  }
 }
 
 /* Map-Info Box auf Mobile: kompakt und ausklappbar */
@@ -680,12 +701,12 @@ ul ul {
     padding: 0.8em;
     max-height: 60vh;
     overflow-y: auto;
-    transition: bottom 0.3s ease; /* Smooth transition */
+    transition: bottom 0.3s ease;
   }
   
   /* Eingeklappt: viel höher */
   .map-info.collapsed {
-    bottom: calc(100vh - 5em) !important; /* Ganz oben, nur Header sichtbar */
+    bottom: calc(100vh - 5em) !important;
     max-height: 2.5em;
     overflow: hidden;
   }

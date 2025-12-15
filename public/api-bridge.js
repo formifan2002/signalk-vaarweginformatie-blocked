@@ -3,7 +3,9 @@ class VaarweginformatieApiBridge {
     this.configUrl = '/plugins/signalk-vaarweginformatie-blocked/config';
     this.restartUrl = '/plugins/signalk-vaarweginformatie-blocked/restart';
     const port = window.location.port ? `:${window.location.port}` : '';
-    this.apiBase = `${window.location.protocol}//${window.location.hostname}${port}/signalk/v2/api/resources`;
+    const baseUrl = `${window.location.protocol}//${window.location.hostname}${port}`;
+    this.apiBase = `${baseUrl}/signalk/v1/api`;          // für Positionsdaten
+    this.apiBaseResources = `${baseUrl}/signalk/v2/api/resources`; // für Resources
   }
 
   async getConfig() {
@@ -51,7 +53,7 @@ class VaarweginformatieApiBridge {
   async getClosures(language = 'de') {
     try {
       const resourceType = language === 'de' ? 'Sperrungen' : 'Closures';
-      const url = `${this.apiBase}/${resourceType}`;
+      const url = `${this.apiBaseResources}/${resourceType}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -63,7 +65,7 @@ class VaarweginformatieApiBridge {
 
   async getWaterways() {
     try {
-      const url = `${this.apiBase}/routes`;
+      const url = `${this.apiBaseResources}/routes`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
@@ -85,4 +87,48 @@ class VaarweginformatieApiBridge {
       return { closures: [], waterways: [] };
     }
   }
+
+  async getLatLon() {
+    try {
+      const url = `${this.apiBase}/vessels/self/navigation/position`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (data.value && typeof data.value.latitude === 'number' && typeof data.value.longitude === 'number') {
+        return { lat: data.value.latitude, lon: data.value.longitude };
+      }
+      if (data.values) {
+        for (const source of Object.values(data.values)) {
+          const val = source.value || {};
+          if (typeof val.latitude === 'number' && typeof val.longitude === 'number') {
+            return { lat: val.latitude, lon: val.longitude };
+          }
+        }
+      }
+      return null;
+    } catch (err) {
+      console.error('Lat/Lon load error:', err);
+      return null;
+    }
+  }
+
+  async getVesselData() {
+  try {
+    const url = `${this.apiBase}/vessels/self/`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    
+    return {
+      name: data.name || null,
+      mmsi: data.mmsi || null,
+      communication: data.communication || null,
+      design: data.design || null
+    };
+  } catch (err) {
+    console.error('Vessel data load error:', err);
+    return null;
+  }
+  }
+  
 }

@@ -117,7 +117,7 @@ class DateRangeComponent extends HTMLElement {
 
     // Flatpickr: Start
     this.fpStart = flatpickr(this.startInput, {
-      disableMobile: true,  // ← NEU
+      disableMobile: true,
       dateFormat: "d.m.y",
       minDate: today,
       maxDate: maxDate,
@@ -135,7 +135,7 @@ class DateRangeComponent extends HTMLElement {
 
     // Flatpickr: Ende
     this.fpEnd = flatpickr(this.endInput, {
-      disableMobile: true,  // ← NEU
+      disableMobile: true,
       dateFormat: "d.m.y",
       minDate: today,
       maxDate: maxDate,
@@ -157,7 +157,7 @@ class DateRangeComponent extends HTMLElement {
     this.shadowRoot.appendChild(hidden);
 
     this.fpRange = flatpickr(hidden, {
-      disableMobile: true,  // ← NEU
+      disableMobile: true,
       mode: "range",
       dateFormat: "d.m.y",
       minDate: today,
@@ -196,6 +196,14 @@ class DateRangeComponent extends HTMLElement {
       this.fpEnd.set("minDate", today);
       this.validateAndEmit(today, maxDate, maxDays);
     });
+
+    // Vorbelege mit "Alle" beim Start
+    setTimeout(() => {
+      const endAll = new Date(today);
+      endAll.setDate(today.getDate() + maxDays);
+      this.fpStart.setDate(today, false);
+      this.fpEnd.setDate(endAll, false);
+    }, 100);
   }
 
   attributeChangedCallback(name, oldValue, newValue) {

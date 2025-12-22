@@ -3,9 +3,9 @@ class VaarweginformatieApiBridge {
     this.configUrl = '/plugins/signalk-vaarweginformatie-blocked/config';
     this.restartUrl = '/plugins/signalk-vaarweginformatie-blocked/restart';
     const port = window.location.port ? `:${window.location.port}` : '';
-    const baseUrl = `${window.location.protocol}//${window.location.hostname}${port}`;
-    this.apiBase = `${baseUrl}/signalk/v1/api`;          // für Positionsdaten
-    this.apiBaseResources = `${baseUrl}/signalk/v2/api/resources`; // für Resources
+    this.baseUrl = `${window.location.protocol}//${window.location.hostname}${port}`;
+    this.apiBase = `${this.baseUrl}/signalk/v1/api`;          // für Positionsdaten
+    this.apiBaseResources = `${this.baseUrl}/signalk/v2/api/resources`; // für Resources
   }
 
   async getConfig() {
@@ -112,23 +112,42 @@ class VaarweginformatieApiBridge {
     }
   }
 
-  async getVesselData() {
-  try {
-    const url = `${this.apiBase}/vessels/self/`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    
-    return {
-      name: data.name || null,
-      mmsi: data.mmsi || null,
-      communication: data.communication || null,
-      design: data.design || null
-    };
-  } catch (err) {
-    console.error('Vessel data load error:', err);
-    return null;
+  async getVesselData(mmsi="") {
+    try {
+      const url = `${this.apiBase}/vessels/${mmsi ? `urn:mrn:imo:mmsi:${mmsi}` : "self"}/`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      
+      return {
+        name: data.name || null,
+        mmsi: data.mmsi || null,
+        communication: data.communication || null,
+        design: data.design || null,
+        navigation: data?.navigation || null
+      };
+    } catch (err) {
+      console.error('Vessel data load error:', err);
+      return null;
+    }
   }
+
+  async getAISConverterConfig() {
+    try {
+      const url = `${this.baseUrl}/plugins/signalk-ais-navionics-converter/config`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const data = await response.json();
+      
+      return {
+        enabled: data.enabled,
+        wsPort: data.configuration?.wsPort || 10114, // ← WICHTIG: wsPort statt tcpPort
+        host: window.location.hostname
+      };
+    } catch (err) {
+      console.error('AIS Converter config load error:', err);
+      return null;
+    }
   }
-  
+
 }

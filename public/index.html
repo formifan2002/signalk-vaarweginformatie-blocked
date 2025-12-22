@@ -165,33 +165,39 @@
     </div>
   </div>
 
-  <!-- Map View -->
-  <div class="map-view" id="mapView">
-    <div id="map"></div>
-    <div class="map-info" id="mapInfo">
-      <div>
-        <input type="checkbox" id="toggleWaterways" checked>
-        <strong id="mapWaterwaysLabel">Wasserwege:</strong>
-        <span id="mapWaterwaysCount">0</span>
-      </div>
-      <div>
-        <input type="checkbox" id="toggleClosures" checked>
-        <strong id="mapClosuresLabel">Sperrungen:</strong>
-        <span id="mapClosuresCount">0</span>
-      </div>
-      <div style="margin-top:0.5em;">
-        <date-range-component></date-range-component>
-      </div>
-      <div style="margin-top:0.5em; display: flex; justify-content: space-between; align-items: center;">
-        <strong id="searchLabel">Suche:</strong>
-        <button id="centerVesselBtn" style="display: none; padding: 0.4em 0.8em; cursor: pointer; border: 1px solid #667eea; background: white; color: #667eea; border-radius: 4px; font-size: 1.2em;" title="">🎯</button>
-      </div>
-      <div style="margin-top:0.3em;">
-        <input type="text" id="searchInput" placeholder="Name der Sperrung..." style="width: 100%; padding: 0.3em;">
-        <div id="searchResults" style="max-height: 150px; overflow-y: auto; margin-top: 0.3em; display: none;"></div>
-      </div>
+<!-- Map View -->
+<div class="map-view" id="mapView"> 
+  <div id="map"></div>
+  <!-- Map Info INNERHALB von map-view verschieben -->
+  <div class="map-info" id="mapInfo">
+    <div>
+      <input type="checkbox" id="toggleWaterways" checked>
+      <strong id="mapWaterwaysLabel">Wasserwege:</strong>
+      <span id="mapWaterwaysCount">0</span>
+    </div>
+    <div>
+      <input type="checkbox" id="toggleClosures" checked>
+      <strong id="mapClosuresLabel">Sperrungen:</strong>
+      <span id="mapClosuresCount">0</span>
+    </div>
+    <div>
+      <input type="checkbox" id="toggleAIS" checked>
+      <strong id="mapAISLabel">AIS - Andere Schiffe:</strong>
+      <span id="mapAISCount">0</span>
+    </div>
+    <div style="margin-top:0.5em;">
+      <date-range-component></date-range-component>
+    </div>
+    <div style="margin-top:0.5em; display: flex; justify-content: space-between; align-items: center;">
+      <strong id="searchLabel">Suche:</strong>
+      <button id="centerVesselBtn" style="display: none; padding: 0.4em 0.8em; cursor: pointer; border: 1px solid #667eea; background: white; color: #667eea; border-radius: 4px; font-size: 1.2em;" title="">🎯</button>
+    </div>
+    <div style="margin-top:0.3em;">
+      <input type="text" id="searchInput" placeholder="Name der Sperrung, MMSI..." style="width: 100%; padding: 0.3em;">
+      <div id="searchResults" style="max-height: 150px; overflow-y: auto; margin-top: 0.3em; display: none;"></div>
     </div>
   </div>
+</div>
 
   <!-- External Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

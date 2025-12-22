@@ -83,7 +83,7 @@ template.innerHTML = `
 
 class DateRangeComponent extends HTMLElement {
   static get observedAttributes() {
-    return ['label-start','label-end'];
+    return ['label-start','label-end','label-today','label-all'];
   }
 
   constructor() {
@@ -107,6 +107,8 @@ class DateRangeComponent extends HTMLElement {
     // Labels initial setzen
     this.labelStart.textContent = this.getAttribute('label-start') || 'Startdatum:';
     this.labelEnd.textContent   = this.getAttribute('label-end')   || 'Enddatum:';
+    this.todayBtn.textContent   = this.getAttribute('label-today') || 'Nur heute';
+    this.allBtn.textContent     = this.getAttribute('label-all')   || 'Alle'; 
 
     // Heute auf Mitternacht setzen
     const today = new Date();
@@ -212,6 +214,12 @@ class DateRangeComponent extends HTMLElement {
     }
     if (name === 'label-end') {
       this.labelEnd.textContent = newValue || 'Enddatum:';
+    }
+    if (name === 'label-today') {
+      this.todayBtn.textContent = newValue || 'Enddatum:';
+    }
+    if (name === 'label-all') {
+      this.allBtn.textContent = newValue || 'Enddatum:';
     }
   }
 

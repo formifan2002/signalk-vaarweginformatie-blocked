@@ -199,3 +199,6 @@ formifan2002
  - Minor bugfixes
  ### Version 1.0.4
  - Adjustments for mobile map view
+ ### Version 1.0.5
+ - AIS class A/B differentiation added
+ 

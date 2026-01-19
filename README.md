@@ -1,6 +1,6 @@
 # SignalK Vaarweginformatie BLOCKED Plugin
 
-Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, etc.) von [vaarweginformatie.nl](https://vaarweginformatie.nl) abruft und über die SignalK Resource Provider API sowie als GPX-Dateien für OpenCPN bereitstellt.
+Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, etc.) von [vaarweginformatie.nl](https://vaarweginformatie.nl) abruft und über die SignalK Resource Provider API, als Notes, sowie als GPX-Dateien für OpenCPN bereitstellt.
 
 <img src="https://raw.githubusercontent.com/formifan2002/signalk-vaarweginformatie-blocked/master/public/icon.png" alt="Icon" width="100" >
 
@@ -16,7 +16,7 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 - Direkter Zoom auf eigenes Schiff (Voraussetzung: Datenpunkt navigation.position in Signal existiert)
 - Ein-/Ausblenden von Wasserwegen und Sperrungen
 - Anzeige von AIS Zielen (Voraussetzung: plugin [signalk-ais-navionics-converter](https://github.com/formifan2002/signalk-ais-navionics-converter]) ist installiert und aktiviert)
-- Übersetzung von niederländischen Text in Deutsch/Englisch (Voraussetzung: API key von deepl.com vorhanden)
+- Übersetzung von niederländischem Text in Deutsch/Englisch (Voraussetzung: API key von deepl.com vorhanden)
 - Nur Kartenanzeige (ohne Plugin-Konfiguration) mit http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk-vaarweginformatie-blocked/?mode=map
 
 <img src="https://raw.githubusercontent.com/formifan2002/signalk-vaarweginformatie-blocked/main/map.png"
@@ -35,9 +35,10 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 - Farbcodierung und Symbolik für optimale Sichtbarkeit
 
 ### 🌍 Mehrsprachigkeit
-- Deutsch und Englisch 
-- Übersetzung aller Beschreibungen und UI-Elemente (für UI-Elemente automatisch, für niederländische Texte mit vorhandenem API key von deepl.com)
+- Deutsch und Englisch für alle UI-Elemente
+- Übersetzung aller niederländischen Beschreibungen in den Daten aus der API von [vaarweginformatie.nl](https://vaarweginformatie.nl)  in Deutsch oder Englisch (nur mit vorhandenem API key von deepl.com) 
 - Speicherung von Übersetzungen in lokalem Cache (wird automatisch nach 30 Tagen gelöscht)
+- Füge eigene Übersetzungen über die API hinzu (Details Server → OpenApi, dann oben rechts in "Select definition" das Plugin "plugins/signalk-vaarweginformatie-blocked" auswählen)
 
 ### ⚙️ Flexible Konfiguration
 - Auswahl spezifischer Regionen in den Niederlanden
@@ -95,7 +96,7 @@ Wähle die zu überwachenden Gebiete:
 
 #### Parameter
 - **Abfrageintervall** (Stunden): Wie oft neue Daten abgerufen werden (Standard: 24)
-- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von vaarweginformatie.nl abgerufen werden (Standard: 120)
+- **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von [vaarweginformatie.nl](https://vaarweginformatie.nl) abgerufen werden (Standard: 120)
 - **Deepl API Schlüssel**  API Schlüssel von deepl.com für die Übersetzung von erweiternden Texten zu Sperrungen (leer=keine Übersetzung)
 - **Punktverschiebung** (Meter): Versetzt Punkte nach Osten für bessere Sichtbarkeit und Vermeidung von Überschneidungen (Standard: 5)
 - **Punktgröße**: Radius der Marker auf der Karte (Standard: 10)
@@ -160,7 +161,7 @@ Wähle die zu überwachenden Gebiete:
 ### Keine Daten werden angezeigt
 - Aktiviere Logging in den Plugin-Einstellungen
 - Überprüfe die Regionsauswahl
-- Prüfe die Internetverbindung zu vaarweginformatie.nl
+- Prüfe die Internetverbindung zu [vaarweginformatie.nl](https://vaarweginformatie.nl) 
 - Erhöhe ggf. die Zeitspanne (daysSpan)
 
 ### GPX-Dateien werden nicht erstellt

@@ -1,0 +1,426 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "signalk-vaarweginformatie-blocked API",
+    "version": "1.0.0",
+    "description": "API endpoints for the SignalK plugin signalk-vaarweginformatie-blocked."
+  },
+  "paths": {
+    "/config": {
+      "get": {
+        "summary": "Get current plugin configuration",
+        "responses": {
+          "200": {
+            "description": "Current configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configuration": {
+                      "type": "object",
+                      "description": "Plugin configuration object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/configure": {
+      "post": {
+        "summary": "Save new plugin configuration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "configuration": {
+                    "type": "object",
+                    "description": "New configuration to save"
+                  }
+                },
+                "required": ["configuration"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration saved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or missing configuration"
+          },
+          "500": {
+            "description": "Internal error while saving configuration"
+          }
+        }
+      }
+    },
+
+    "/restart": {
+      "post": {
+        "summary": "Restart the plugin",
+        "responses": {
+          "200": {
+            "description": "Plugin restart initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/translate": {
+      "get": {
+        "summary": "Translate a text into a target language",
+        "description": "Translates text using manual replacements first, then Google Translate. Uses cached translations when available.",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": true,
+            "description": "Text to translate",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Target language code (default: 'de')",
+            "schema": { 
+              "type": "string",
+              "default": "de"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Source language code (default: 'nl')",
+            "schema": { 
+              "type": "string",
+              "default": "nl"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Translated text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "translated": { 
+                      "type": "string",
+                      "description": "The translated text"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": ["cache", "translatedText"],
+                      "description": "Where the translation came from"
+                    },
+                    "manualReplacementsApplied": {
+                      "type": "boolean",
+                      "description": "Whether manual replacements were applied before translation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing text parameter"
+          },
+          "500": {
+            "description": "Translation failed"
+          }
+        }
+      }
+    },
+
+    "/addtranslation": {
+      "get": {
+        "summary": "Get all manual translations",
+        "description": "Retrieve all manual translations for a specific language pair",
+        "parameters": [
+          {
+            "name": "sourceLang",
+            "in": "query",
+            "required": false,
+            "description": "Source language code (default: 'nl')",
+            "schema": { 
+              "type": "string",
+              "default": "nl"
+            }
+          },
+          {
+            "name": "targetLang",
+            "in": "query",
+            "required": false,
+            "description": "Target language code (default: 'de')",
+            "schema": { 
+              "type": "string",
+              "default": "de"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of manual translations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sourceLang": { "type": "string" },
+                    "targetLang": { "type": "string" },
+                    "count": { "type": "integer" },
+                    "translations": {
+                      "type": "object",
+                      "additionalProperties": { "type": "string" },
+                      "description": "Key-value pairs of original text to translation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to retrieve manual translations"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a manual translation",
+        "description": "Add a manual translation that will be applied before Google Translate. Manual translations never expire and automatically update existing cached translations.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "original": {
+                    "type": "string",
+                    "description": "Original text (case-sensitive)"
+                  },
+                  "translation": {
+                    "type": "string",
+                    "description": "Manual translation"
+                  },
+                  "sourceLang": {
+                    "type": "string",
+                    "description": "Source language code (default: 'nl')",
+                    "default": "nl"
+                  },
+                  "targetLang": {
+                    "type": "string",
+                    "description": "Target language code (default: 'de')",
+                    "default": "de"
+                  }
+                },
+                "required": ["original", "translation"]
+              },
+              "examples": {
+                "basic": {
+                  "summary": "Basic translation",
+                  "value": {
+                    "original": "sluizen",
+                    "translation": "schleuse"
+                  }
+                },
+                "withLanguages": {
+                  "summary": "With language specification",
+                  "value": {
+                    "original": "bruggen",
+                    "translation": "Brücken",
+                    "sourceLang": "nl",
+                    "targetLang": "de"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual translation added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "original": { "type": "string" },
+                    "translation": { "type": "string" },
+                    "sourceLang": { "type": "string" },
+                    "targetLang": { "type": "string" },
+                    "stats": {
+                      "type": "object",
+                      "description": "Updated cache statistics"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields: original and translation"
+          },
+          "500": {
+            "description": "Failed to add manual translation"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a manual translation",
+        "description": "Delete a manual translation from the system",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "original": {
+                    "type": "string",
+                    "description": "Original text to remove"
+                  },
+                  "sourceLang": {
+                    "type": "string",
+                    "description": "Source language code (default: 'nl')",
+                    "default": "nl"
+                  },
+                  "targetLang": {
+                    "type": "string",
+                    "description": "Target language code (default: 'de')",
+                    "default": "de"
+                  }
+                },
+                "required": ["original"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual translation removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "original": { "type": "string" },
+                    "sourceLang": { "type": "string" },
+                    "targetLang": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required field: original"
+          },
+          "404": {
+            "description": "Manual translation not found"
+          },
+          "500": {
+            "description": "Failed to remove manual translation"
+          }
+        }
+      }
+    },
+
+    "/translation-stats": {
+      "get": {
+        "summary": "Get translation cache statistics",
+        "description": "Returns statistics about the translation cache including manual and automatic translations",
+        "responses": {
+          "200": {
+            "description": "Cache statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalEntries": {
+                      "type": "integer",
+                      "description": "Total number of cached translations"
+                    },
+                    "manualEntries": {
+                      "type": "integer",
+                      "description": "Number of manual translations in cache"
+                    },
+                    "manualReplacements": {
+                      "type": "integer",
+                      "description": "Number of manual replacement rules"
+                    },
+                    "oldestEntry": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Timestamp of oldest cache entry"
+                    },
+                    "newestEntry": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Timestamp of newest cache entry"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to get statistics"
+          }
+        }
+      }
+    },
+
+    "/openapi": {
+      "get": {
+        "summary": "Return the OpenAPI specification file",
+        "description": "Serves the openApi.json file from the plugin directory.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI specification JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -13,11 +13,18 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 - Detaillierte Popup-Informationen mit verlinkten Berichten
 - Filterung nach Datum/Zeitraum
 - Suchfunktion für Sperrungen
+- Direkter Zoom auf eigenes Schiff (Voraussetzung: Datenpunkt navigation.position in Signal existiert)
 - Ein-/Ausblenden von Wasserwegen und Sperrungen
+- Anzeige von AIS Zielen (Voraussetzung: plugin [signalk-ais-navionics-converter](https://github.com/formifan2002/signalk-ais-navionics-converter]) ist installiert und aktiviert)
+- Übersetzung von niederländischen Text in Deutsch/Englisch (Voraussetzung: API key von deepl.com vorhanden)
 - Nur Kartenanzeige (ohne Plugin-Konfiguration) mit http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk-vaarweginformatie-blocked/?mode=map
 
+<img src="https://raw.githubusercontent.com/formifan2002/signalk-vaarweginformatie-blocked/main/map.png"
+     width="75%"
+     style="margin-left: 20px;" />
+
 ### 📡 SignalK Integration
-- Bereitstellung als SignalK Resource Sets
+- Bereitstellung als SignalK Resource Sets und Notes (für gesperrte Objekte wie Brücken, Schleusen,..)
 - Automatische Aktualisierung in konfigurierbaren Intervallen
 - Kompatibel mit Freeboard-SK und anderen SignalK-Clients
 - RESTful API-Zugriff auf alle Daten
@@ -28,8 +35,9 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 - Farbcodierung und Symbolik für optimale Sichtbarkeit
 
 ### 🌍 Mehrsprachigkeit
-- Deutsch und Englisch
-- Automatische Übersetzung aller Beschreibungen und UI-Elemente
+- Deutsch und Englisch 
+- Übersetzung aller Beschreibungen und UI-Elemente (für UI-Elemente automatisch, für niederländische Texte mit vorhandenem API key von deepl.com)
+- Speicherung von Übersetzungen in lokalem Cache (wird automatisch nach 30 Tagen gelöscht)
 
 ### ⚙️ Flexible Konfiguration
 - Auswahl spezifischer Regionen in den Niederlanden
@@ -45,12 +53,6 @@ Ein SignalK-Plugin, das gesperrte Wasserwege und Objekte (Schleusen, Brücken, e
 2. Navigiere zu **Appstore** → **Available**
 3. Suche nach "vaarweginformatie"
 4. Klicke auf **Install**
-
-### Manuelle Installation
-```bash
-cd ~/.signalk
-npm install signalk-vaarweginformatie-blocked
-```
 
 Nach der Installation starte den SignalK Server neu.
 
@@ -94,6 +96,7 @@ Wähle die zu überwachenden Gebiete:
 #### Parameter
 - **Abfrageintervall** (Stunden): Wie oft neue Daten abgerufen werden (Standard: 24)
 - **Zeitspanne** (Tage): Wie viele Tage in die Zukunft soll geprüft / die Daten von vaarweginformatie.nl abgerufen werden (Standard: 120)
+- **Deepl API Schlüssel**  API Schlüssel von deepl.com für die Übersetzung von erweiternden Texten zu Sperrungen (leer=keine Übersetzung)
 - **Punktverschiebung** (Meter): Versetzt Punkte nach Osten für bessere Sichtbarkeit und Vermeidung von Überschneidungen (Standard: 5)
 - **Punktgröße**: Radius der Marker auf der Karte (Standard: 10)
 - **Farbe**: Hex-Farbcode für Marker in Freeboard-SK und OpenCPN sowie Linien in OpenCPN (Standard: #FF0000)
@@ -116,26 +119,25 @@ Wähle die zu überwachenden Gebiete:
 - **Zurück**: Kehrt zur vorherigen Seite zurück (mit Warnung bei ungespeicherten Änderungen)
 
 #### Kartenansicht
-- Wechsle über die Toggle-Buttons oben
+- Wechsle über die Toggle-Buttons oben (alternativ direkter Aufruf über den Browser mit http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk-vaarweginformatie-blocked/?mode=map)
 - **Wasserwege**: Zeigt/versteckt gesperrte Routen (rote Linien)
 - **Sperrungen**: Zeigt/versteckt gesperrte Objekte (rote Punkte)
 - **Datumsfilter**: Filtere Sperrungen nach Zeitraum
   - Vordefinierte Filter: Heute, Alle
   - Benutzerdefiniert: Wähle Start- und Enddatum
-- **Suche**: Suche nach Namen von Sperrungen oder Wasserwegen
-- **Popup-Details**: Klicke auf Marker oder Linien für detaillierte Informationen
-
-
+- **Suche**: Suche nach Namen von Sperrungen, Wasserwegen oder MMSI für AIS Ziele (Voraussetzung: plugin [signalk-ais-navionics-converter](https://github.com/formifan2002/signalk-ais-navionics-converter]) ist installiert und aktiviert) - **Popup-Details**: Klicke auf Marker oder Linien für detaillierte Informationen
 
 ### Resource Sets abrufen
-- Sperrungen (Objekte): http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk/v2/api/resources/Sperrungen
+- Sperrungen (Objekte) - je nach Spracheinstellung: http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk/v2/api/resources/Sperrungen oder http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk/v2/api/resources/Closures 
 - Wasserwege (Routen): http://<SIGNALK_IP>:<SIGNALK_PORT>/signalk/v2/api/resources/routes
 
 ### Freeboard-SK Integration
 1. Öffne Freeboard-SK
 2. Navigiere in den **Settings** zu **Ressourcen**
 3. Die Sperrungen erscheinen automatisch unter **Custom Resoures** als "Sperrungen" oder "Closures" (je nach Spracheinstellung im Plugin)
-4. Gesperrte Wasserwege erscheinen unter "Routes"
+4. Sobald 3. aktiviert wurde, erscheint im Menü („Routes, Waypoints, Notes, Regions, …“) ganz unten der zusätzliche Punkt „Sperrungen“. Nach dem Anklicken dieses Menüpunktes lassen sich die Regionen einzeln ein‑ oder ausschalten
+5. Gesperrte Wasserwege erscheinen automatisch unter "Routes" (ohne weitere Konfiguration in SignalK)
+6. Die Sperrungen (nicht gesperrte Wasserwege) stehen auch als "Notes" zur Verfügung und werden automatisch beim Zommen in der Karte angezeigt (Voraussetzung: "Display Notes" ist in den freeboard-sk settins aktiviert)
 
 ### OpenCPN Integration
 1. Konfiguriere die GPX-Dateipfade im Plugin
@@ -200,5 +202,15 @@ formifan2002
  ### Version 1.0.4
  - Adjustments for mobile map view
  ### Version 1.0.5
- - AIS class A/B differentiation added
- 
+ - AIS class A/B differentiation added (prerequiste for AIS feature is the installation and activation of the plugin [signalk-ais-navionics-converter])(https://github.com/formifan2002/signalk-ais-navionics-converter])
+  ### Version 1.0.6
+ - Closures (not routes) are provided as SignalK notes and can be used by freeboard-sk
+ - OpenAPI added
+ - Function to translate Dutch text into German or English implemented (prerequisite: Deepl API key available)
+ - ROT changed from °/m to °/s
+ - Feature to show only vessels with SOG>0 added in map view
+ - Optimized detailled view for route closures
+ - Minimized API calls
+ - Bug corrections: 
+    - more than 1 entries for the same object were not reported correctly
+    - minor bugs corrected

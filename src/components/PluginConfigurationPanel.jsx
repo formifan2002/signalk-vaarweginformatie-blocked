@@ -1,614 +1,710 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 const PluginConfigurationPanel = ({ configuration, save }) => {
-  const [config, setConfig] = useState(configuration || {});
-  const [currentLang, setCurrentLang] = useState(config.language ? 'de' : 'en');
-  const [initialConfig, setInitialConfig] = useState(configuration);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [showDialog, setShowDialog] = useState(false);
-  const [dialogData, setDialogData] = useState({ title: '', message: '', callback: null });
+	const [config, setConfig] = useState(configuration || {});
+	const [currentLang, setCurrentLang] = useState(config.language ? "de" : "en");
+	const [initialConfig, setInitialConfig] = useState(configuration);
+	const [loading, setLoading] = useState(false);
+	const [status, setStatus] = useState("");
+	const [showDialog, setShowDialog] = useState(false);
+	const [dialogData, setDialogData] = useState({
+		title: "",
+		message: "",
+		callback: null,
+	});
 
-  const areaLabels = {
-    "All areas": { de: "Alle Gebiete", en: "All areas" },
-    "Algemeen Nederland": { de: "Allgemein Niederlande", en: "General Netherlands" },
-    "Noordzee": { de: "Nordsee", en: "North Sea" },
-    "Eems": { de: "Ems", en: "Ems" },
-    "Waddenzee": { de: "Wattenmeer", en: "Wadden Sea" },
-    "Groningen": { de: "Groningen", en: "Groningen" },
-    "Fryslan": { de: "Friesland", en: "Friesland" },
-    "Drenthe": { de: "Drenthe", en: "Drenthe" },
-    "Overijssel": { de: "Overijssel", en: "Overijssel" },
-    "Gelderland": { de: "Gelderland", en: "Gelderland" },
-    "Ijsselmeer": { de: "IJsselmeer", en: "IJsselmeer" },
-    "Flevoland": { de: "Flevoland", en: "Flevoland" },
-    "Utrecht": { de: "Utrecht", en: "Utrecht" },
-    "Noord-Holland": { de: "Nordholland", en: "North Holland" },
-    "Zuid-Holland": { de: "Südholland", en: "South Holland" },
-    "Zeeland": { de: "Zeeland", en: "Zeeland" },
-    "Noord-Brabant": { de: "Nordbrabant", en: "North Brabant" },
-    "Limburg": { de: "Limburg", en: "Limburg" }
-  };
+	const areaLabels = {
+		"All areas": { de: "Alle Gebiete", en: "All areas" },
+		"Algemeen Nederland": {
+			de: "Allgemein Niederlande",
+			en: "General Netherlands",
+		},
+		Noordzee: { de: "Nordsee", en: "North Sea" },
+		Eems: { de: "Ems", en: "Ems" },
+		Waddenzee: { de: "Wattenmeer", en: "Wadden Sea" },
+		Groningen: { de: "Groningen", en: "Groningen" },
+		Fryslan: { de: "Friesland", en: "Friesland" },
+		Drenthe: { de: "Drenthe", en: "Drenthe" },
+		Overijssel: { de: "Overijssel", en: "Overijssel" },
+		Gelderland: { de: "Gelderland", en: "Gelderland" },
+		Ijsselmeer: { de: "IJsselmeer", en: "IJsselmeer" },
+		Flevoland: { de: "Flevoland", en: "Flevoland" },
+		Utrecht: { de: "Utrecht", en: "Utrecht" },
+		"Noord-Holland": { de: "Nordholland", en: "North Holland" },
+		"Zuid-Holland": { de: "Südholland", en: "South Holland" },
+		Zeeland: { de: "Zeeland", en: "Zeeland" },
+		"Noord-Brabant": { de: "Nordbrabant", en: "North Brabant" },
+		Limburg: { de: "Limburg", en: "Limburg" },
+	};
 
-  const areaOrder = [
-    "All areas",
-    "Algemeen Nederland",
-    "Drenthe",
-    "Eems",
-    "Flevoland",
-    "Fryslan",
-    "Gelderland",
-    "Groningen",
-    "Ijsselmeer",
-    "Limburg",
-    "Noord-Brabant",
-    "Noord-Holland",
-    "Noordzee",
-    "Overijssel",
-    "Utrecht",
-    "Waddenzee",
-    "Zeeland",
-    "Zuid-Holland"
-  ];
+	const areaOrder = [
+		"All areas",
+		"Algemeen Nederland",
+		"Drenthe",
+		"Eems",
+		"Flevoland",
+		"Fryslan",
+		"Gelderland",
+		"Groningen",
+		"Ijsselmeer",
+		"Limburg",
+		"Noord-Brabant",
+		"Noord-Holland",
+		"Noordzee",
+		"Overijssel",
+		"Utrecht",
+		"Waddenzee",
+		"Zeeland",
+		"Zuid-Holland",
+	];
 
-  const translations = {
-    de: {
-      title: "Konfiguration 'signalk-vaarweginformatie-blocked'",
-      description: 'Das Plugin stellt die Informationen von vaarweginformatie.nl über aktuell und zukünftig gesperrte Schleusen, Brücken und Wasserwege in den Niederlanden bereit.',
-      generalLegend: "Allgemein",
-      languageLabel: "Sprache:",
-      languageHelp: "Auswahl der Sprache für Dialog und Felder in der Schnittstelle",
-      areasLegend: "Gebiete",
-      paramsLegend: "Parameter",
-      pollInterval: "Poll-Intervall (Stunden):",
-      pollHelp: 'Abfrageintervall der Informationen von vaarweginformatie.nl in Stunden (Standard: 24)',
-      daysSpan: "Zeitraum (Tage):",
-      daysHelp: "Anzahl Tage von heute an gerechnet (maximal 60)",
-      routesPath: "Dateiname gesperrte Wasserwege:",
-      routesHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Wasserwegen für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
-      waypointsPath: "Dateiname gesperrte Schleusen und Brücken:",
-      waypointsHelp: "Pfad + Dateiname der GPX-Datei mit gesperrten Schleusen und Brücken für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
-      inputDirectory: "Input-Verzeichnis:",
-      inputDirectoryHelp: "Verzeichnis für Eingabedateien",
-      timeframeStart: "Zeitrahmen Start:",
-      timeframeEnd: "Zeitrahmen Ende:",
-      timeframeHelp: "Zeitraum für die Datenabfrage",
-      moveMeters: "Punktverschiebung (m):",
-      moveHelp: "Punktverschiebung nach rechts in Metern (zur Vermeidung von Überlagerungen)",
-      pointSize: "Punktgröße:",
-      sizeHelp: "Größe der Punkte auf der Karte von freeboard-sk",
-      color: "Farbe:",
-      colorHelp: "Farbe der Punkte",
-      save: "Speichern",
-      cancel: "Abbruch",
-      unsavedWarning: "Es gibt ungespeicherte Änderungen. Wirklich abbrechen?",
-      unsavedTitle: "Ungespeicherte Änderungen",
-      yes: "Ja",
-      no: "Nein",
-      selectDirectory: "Verzeichnis wählen"
-    },
-    en: {
-      title: "Configuration 'signalk-vaarweginformatie-blocked'",
-      description: 'The plugin provides information from vaarweginformatie.nl about currently and future blocked locks, bridges and waterways in the Netherlands.',
-      generalLegend: "General",
-      languageLabel: "Language:",
-      languageHelp: "Selection of language for dialogs and fields in the interface",
-      areasLegend: "Areas",
-      paramsLegend: "Parameters",
-      pollInterval: "Poll interval (hours):",
-      pollHelp: 'Poll interval for information from vaarweginformatie.nl in hours (default: 24)',
-      daysSpan: "Time span (days):",
-      daysHelp: "Number of days from today (maximum 60)",
-      routesPath: "Filename blocked waterways:",
-      routesHelp: "Path + filename of GPX file with blocked waterways for OpenCPN (as permanent layer). No file generation if field is empty",
-      waypointsPath: "Filename blocked locks and bridges:",
-      waypointsHelp: "Path + filename of GPX file with blocked locks and bridges for OpenCPN (as permanent layer). No file generation if field is empty",
-      inputDirectory: "Input Directory:",
-      inputDirectoryHelp: "Directory for input files",
-      timeframeStart: "Timeframe start:",
-      timeframeEnd: "Timeframe end:",
-      timeframeHelp: "Time range for data query",
-      moveMeters: "Move point (m):",
-      moveHelp: "Point offset to the right in meters (to avoid overlaps)",
-      pointSize: "Point size:",
-      sizeHelp: "Size of points on the freeboard-sk map",
-      color: "Color:",
-      colorHelp: "Color of the points",
-      save: "Save",
-      cancel: "Cancel",
-      unsavedWarning: "There are unsaved changes. Really cancel?",
-      unsavedTitle: "Unsaved changes",
-      yes: "Yes",
-      no: "No",
-      selectDirectory: "Select Directory"
-    }
-  };
+	const translations = {
+		de: {
+			title: "Konfiguration 'signalk-vaarweginformatie-blocked'",
+			description:
+				"Das Plugin stellt die Informationen von vaarweginformatie.nl über aktuell und zukünftig gesperrte Schleusen, Brücken und Wasserwege in den Niederlanden bereit.",
+			generalLegend: "Allgemein",
+			languageLabel: "Sprache:",
+			languageHelp:
+				"Auswahl der Sprache für Dialog und Felder in der Schnittstelle",
+			areasLegend: "Gebiete",
+			paramsLegend: "Parameter",
+			pollInterval: "Poll-Intervall (Stunden):",
+			pollHelp:
+				"Abfrageintervall der Informationen von vaarweginformatie.nl in Stunden (Standard: 24)",
+			daysSpan: "Zeitraum (Tage):",
+			daysHelp: "Anzahl Tage von heute an gerechnet (maximal 90)",
+			deeplApiKeyLabel: "DeepL API Schlüssel:",
+			deeplApiKeyHelp:
+				"DeepL API Schlüssel für Übersetzung von erweiternden Texten zu Sperrungen (leer=keine Übersetzung)",
 
-  const t = translations[currentLang];
+			routesPath: "Dateiname gesperrte Wasserwege:",
+			routesHelp:
+				"Pfad + Dateiname der GPX-Datei mit gesperrten Wasserwegen für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
+			waypointsPath: "Dateiname gesperrte Schleusen und Brücken:",
+			waypointsHelp:
+				"Pfad + Dateiname der GPX-Datei mit gesperrten Schleusen und Brücken für OpenCPN (als permanenter Layer). Bei leerem Feld erfolgt keine Dateierzeugung",
+			inputDirectory: "Input-Verzeichnis:",
+			inputDirectoryHelp: "Verzeichnis für Eingabedateien",
+			timeframeStart: "Zeitrahmen Start:",
+			timeframeEnd: "Zeitrahmen Ende:",
+			timeframeHelp: "Zeitraum für die Datenabfrage",
+			moveMeters: "Punktverschiebung (m):",
+			moveHelp:
+				"Punktverschiebung nach rechts in Metern (zur Vermeidung von Überlagerungen)",
+			pointSize: "Punktgröße:",
+			sizeHelp: "Größe der Punkte auf der Karte von freeboard-sk",
+			color: "Farbe:",
+			colorHelp: "Farbe der Punkte",
+			save: "Speichern",
+			cancel: "Abbruch",
+			unsavedWarning: "Es gibt ungespeicherte Änderungen. Wirklich abbrechen?",
+			unsavedTitle: "Ungespeicherte Änderungen",
+			yes: "Ja",
+			no: "Nein",
+			selectDirectory: "Verzeichnis wählen",
+		},
+		en: {
+			title: "Configuration 'signalk-vaarweginformatie-blocked'",
+			description:
+				"The plugin provides information from vaarweginformatie.nl about currently and future blocked locks, bridges and waterways in the Netherlands.",
+			generalLegend: "General",
+			languageLabel: "Language:",
+			languageHelp:
+				"Selection of language for dialogs and fields in the interface",
+			areasLegend: "Areas",
+			paramsLegend: "Parameters",
+			pollInterval: "Poll interval (hours):",
+			pollHelp:
+				"Poll interval for information from vaarweginformatie.nl in hours (default: 24)",
+			daysSpan: "Time span (days):",
+			daysHelp: "Number of days from today (maximum 90)",
+			deeplApiKeyLabel: "DeepL API Key:",
+			deeplApiKeyHelp:
+				"DeepL API Key for translation of extended texts for closures (empty=no translation)",
+			routesPath: "Filename blocked waterways:",
+			routesHelp:
+				"Path + filename of GPX file with blocked waterways for OpenCPN (as permanent layer). No file generation if field is empty",
+			waypointsPath: "Filename blocked locks and bridges:",
+			waypointsHelp:
+				"Path + filename of GPX file with blocked locks and bridges for OpenCPN (as permanent layer). No file generation if field is empty",
+			inputDirectory: "Input Directory:",
+			inputDirectoryHelp: "Directory for input files",
+			timeframeStart: "Timeframe start:",
+			timeframeEnd: "Timeframe end:",
+			timeframeHelp: "Time range for data query",
+			moveMeters: "Move point (m):",
+			moveHelp: "Point offset to the right in meters (to avoid overlaps)",
+			pointSize: "Point size:",
+			sizeHelp: "Size of points on the freeboard-sk map",
+			color: "Color:",
+			colorHelp: "Color of the points",
+			save: "Save",
+			cancel: "Cancel",
+			unsavedWarning: "There are unsaved changes. Really cancel?",
+			unsavedTitle: "Unsaved changes",
+			yes: "Yes",
+			no: "No",
+			selectDirectory: "Select Directory",
+		},
+	};
 
-  const handleConfigChange = (key, value) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
-  };
+	const t = translations[currentLang];
 
-  const handleAreaToggle = (area) => {
-    if (area === 'All areas') {
-      if (config['All areas']) {
-        setConfig(prev => ({ ...prev, 'All areas': false }));
-      } else {
-        const newConfig = { ...config, 'All areas': true };
-        areaOrder.forEach(a => { if (a !== 'All areas') newConfig[a] = false; });
-        setConfig(newConfig);
-      }
-    } else {
-      setConfig(prev => ({
-        ...prev,
-        [area]: !prev[area],
-        'All areas': false
-      }));
-    }
-  };
+	const handleConfigChange = (key, value) => {
+		setConfig((prev) => ({ ...prev, [key]: value }));
+	};
 
-  const checkUnsavedChanges = () => {
-    return JSON.stringify(config) !== JSON.stringify(initialConfig);
-  };
+	const handleLanguageChange = (lang) => {
+		setCurrentLang(lang);
+		handleConfigChange("language", lang);
+	};
 
-  const handleSave = () => {
-    setLoading(true);
-    if (save) {
-      save(config).then(() => {
-        setStatus('success');
-        setInitialConfig(config);
-        setTimeout(() => setStatus(''), 3000);
-      }).catch(err => {
-        setStatus('error');
-        setTimeout(() => setStatus(''), 3000);
-      }).finally(() => {
-        setLoading(false);
-      });
-    }
-  };
+	const handleAreaToggle = (area) => {
+		if (area === "All areas") {
+			if (config["All areas"]) {
+				setConfig((prev) => ({ ...prev, "All areas": false }));
+			} else {
+				const newConfig = { ...config, "All areas": true };
+				areaOrder.forEach((a) => {
+					if (a !== "All areas") newConfig[a] = false;
+				});
+				setConfig(newConfig);
+			}
+		} else {
+			setConfig((prev) => ({
+				...prev,
+				[area]: !prev[area],
+				"All areas": false,
+			}));
+		}
+	};
 
-  const handleFileSelect = (inputId) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.gpx';
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        // Versuche den vollständigen Pfad zu erhalten
-        let fullPath = file.path || '';
-        
-        // Fallback für Browser ohne file.path Support
-        if (!fullPath && file.name) {
-          fullPath = file.name;
-        }
-        
-        handleConfigChange(inputId === 'routesPath' ? 'openCpnGeoJsonPathRoutes' : 'openCpnGeoJsonPathWaypoints', fullPath);
-      }
-    };
-    input.click();
-  };
+	const checkUnsavedChanges = () => {
+		return JSON.stringify(config) !== JSON.stringify(initialConfig);
+	};
 
-  const handleDirectorySelect = () => {
-    // In einer Web-Umgebung können wir nur den Verzeichnisnamen aus dem relativen Pfad extrahieren
-    // Für echte Verzeichnisauswahl wird eine native Integration (Electron/Node) benötigt
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.webkitdirectory = true;
-    input.directory = true;
-    input.multiple = true;
-    
-    input.onchange = (e) => {
-      const files = e.target.files;
-      if (files.length > 0) {
-        // Extrahiere das Verzeichnis aus dem ersten Datei-Pfad
-        const firstFile = files[0];
-        let directoryPath = '';
-        
-        if (firstFile.webkitRelativePath) {
-          // Format: "verzeichnis/datei.txt" -> "verzeichnis"
-          const parts = firstFile.webkitRelativePath.split('/');
-          directoryPath = parts.slice(0, -1).join('/') || parts[0];
-        } else if (firstFile.path) {
-          // Node/Electron Umgebung
-          const parts = firstFile.path.split(/[/\\]/);
-          directoryPath = parts.slice(0, -1).join('/');
-        }
-        
-        if (directoryPath) {
-          handleConfigChange('inputDirectory', directoryPath);
-        }
-      }
-    };
-    
-    input.click();
-  };
+	const handleSave = () => {
+		setLoading(true);
+		if (save) {
+			try {
+				const result = save(config);
 
-  const areDisabled = config['All areas'];
+				if (result && typeof result.then === "function") {
+					result
+						.then(() => {
+							setStatus("success");
+							setInitialConfig(config);
+							setTimeout(() => setStatus(""), 3000);
+						})
+						.catch((err) => {
+							setStatus("error");
+							setTimeout(() => setStatus(""), 3000);
+						})
+						.finally(() => {
+							setLoading(false);
+						});
+				} else {
+					setStatus("success");
+					setInitialConfig(config);
+					setTimeout(() => setStatus(""), 3000);
+					setLoading(false);
+				}
+			} catch (err) {
+				console.error("Error in handleSave:", err);
+				setStatus("error");
+				setTimeout(() => setStatus(""), 3000);
+				setLoading(false);
+			}
+		}
+	};
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <button 
-          onClick={() => window.open('https://github.com/formifan2002/signalk-vaarweginformatie-blocked', '_blank')}
-          style={styles.helpButton}
-        >
-          ℹ️ {currentLang === 'de' ? 'Hilfe' : 'Help'}
-        </button>
-      </div>
+	const handleFileSelect = (inputId) => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.accept = ".gpx";
+		input.onchange = (e) => {
+			const file = e.target.files[0];
+			if (file) {
+				// Versuche den vollständigen Pfad zu erhalten
+				let fullPath = file.path || "";
 
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>{t.generalLegend}</h3>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.languageLabel}</label>
-          <select
-            value={currentLang}
-            onChange={(e) => setCurrentLang(e.target.value)}
-            style={styles.select}
-          >
-            <option value="de">Deutsch</option>
-            <option value="en">English</option>
-          </select>
-          <small style={styles.help}>{t.languageHelp}</small>
-        </div>
-      </div>
+				// Fallback für Browser ohne file.path Support
+				if (!fullPath && file.name) {
+					fullPath = file.name;
+				}
 
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>{t.areasLegend}</h3>
-        <div style={styles.areasGrid}>
-          {areaOrder.sort((a, b) => {
-            if (a === 'All areas') return -1;
-            if (b === 'All areas') return 1;
-            return areaLabels[a][currentLang].localeCompare(areaLabels[b][currentLang]);
-          }).map(area => (
-            <label key={area} style={styles.checkbox}>
-              <input
-                type="checkbox"
-                checked={config[area] || false}
-                onChange={() => handleAreaToggle(area)}
-                disabled={area !== 'All areas' && areDisabled}
-              />
-              {areaLabels[area][currentLang]}
-            </label>
-          ))}
-        </div>
-      </div>
+				handleConfigChange(
+					inputId === "routesPath"
+						? "openCpnGeoJsonPathRoutes"
+						: "openCpnGeoJsonPathWaypoints",
+					fullPath
+				);
+			}
+		};
+		input.click();
+	};
 
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>{t.paramsLegend}</h3>
+	const handleDirectorySelect = () => {
+		// In einer Web-Umgebung können wir nur den Verzeichnisnamen aus dem relativen Pfad extrahieren
+		// Für echte Verzeichnisauswahl wird eine native Integration (Electron/Node) benötigt
+		const input = document.createElement("input");
+		input.type = "file";
+		input.webkitdirectory = true;
+		input.directory = true;
+		input.multiple = true;
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.pollInterval}</label>
-          <input
-            type="number"
-            min="1"
-            value={config.pollIntervalHours || 24}
-            onChange={(e) => handleConfigChange('pollIntervalHours', Number(e.target.value))}
-            style={styles.input}
-          />
-          <small style={styles.help}>{t.pollHelp}</small>
-        </div>
+		input.onchange = (e) => {
+			const files = e.target.files;
+			if (files.length > 0) {
+				// Extrahiere das Verzeichnis aus dem ersten Datei-Pfad
+				const firstFile = files[0];
+				let directoryPath = "";
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.daysSpan}</label>
-          <input
-            type="number"
-            min="1"
-            max="60"
-            value={config.daysSpan || 14}
-            onChange={(e) => handleConfigChange('daysSpan', Number(e.target.value))}
-            style={styles.input}
-          />
-          <small style={styles.help}>{t.daysHelp}</small>
-        </div>
+				if (firstFile.webkitRelativePath) {
+					// Format: "verzeichnis/datei.txt" -> "verzeichnis"
+					const parts = firstFile.webkitRelativePath.split("/");
+					directoryPath = parts.slice(0, -1).join("/") || parts[0];
+				} else if (firstFile.path) {
+					// Node/Electron Umgebung
+					const parts = firstFile.path.split(/[/\\]/);
+					directoryPath = parts.slice(0, -1).join("/");
+				}
 
-         <div style={styles.formGroup}>
-          <label style={styles.label}>{t.routesPath}</label>
-          <div style={styles.inputWithButton}>
-            <input
-              type="text"
-              value={config.openCpnGeoJsonPathRoutes || ''}
-              onChange={(e) => handleConfigChange('openCpnGeoJsonPathRoutes', e.target.value)}
-              style={styles.inputPath}
-            />
-            <button
-              type="button"
-              onClick={() => handleFileSelect('routesPath')}
-              style={styles.fileButton}
-            >
-              📄
-            </button>
-          </div>
-          <small style={styles.help}>{t.routesHelp}</small>
-        </div>
+				if (directoryPath) {
+					handleConfigChange("inputDirectory", directoryPath);
+				}
+			}
+		};
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.waypointsPath}</label>
-          <div style={styles.inputWithButton}>
-            <input
-              type="text"
-              value={config.openCpnGeoJsonPathWaypoints || ''}
-              onChange={(e) => handleConfigChange('openCpnGeoJsonPathWaypoints', e.target.value)}
-              style={styles.inputPath}
-            />
-            <button
-              type="button"
-              onClick={() => handleFileSelect('waypointsPath')}
-              style={styles.fileButton}
-            >
-              📄
-            </button>
-          </div>
-          <small style={styles.help}>{t.waypointsHelp}</small>
-        </div>
+		input.click();
+	};
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.moveMeters}</label>
-          <input
-            type="number"
-            min="0"
-            value={config.movePointMeters || 0}
-            onChange={(e) => handleConfigChange('movePointMeters', Number(e.target.value))}
-            style={styles.input}
-          />
-          <small style={styles.help}>{t.moveHelp}</small>
-        </div>
+	const areDisabled = config["All areas"];
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.pointSize}</label>
-          <input
-            type="number"
-            min="1"
-            value={config.pointSize || 5}
-            onChange={(e) => handleConfigChange('pointSize', Number(e.target.value))}
-            style={styles.input}
-          />
-          <small style={styles.help}>{t.sizeHelp}</small>
-        </div>
+	return (
+		<div style={styles.container}>
+			<div style={styles.header}>
+				<button
+					onClick={() =>
+						window.open(
+							"https://github.com/formifan2002/signalk-vaarweginformatie-blocked",
+							"_blank"
+						)
+					}
+					style={styles.helpButton}
+				>
+					ℹ️ {currentLang === "de" ? "Hilfe" : "Help"}
+				</button>
+			</div>
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>{t.color}</label>
-          <input
-            type="color"
-            value={config.colorHex || '#FF0000'}
-            onChange={(e) => handleConfigChange('colorHex', e.target.value)}
-            style={styles.colorInput}
-          />
-          <small style={styles.help}>{t.colorHelp}</small>
-        </div>
-      </div>
+			<div style={styles.section}>
+				<h3 style={styles.sectionTitle}>{t.generalLegend}</h3>
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.languageLabel}</label>
+					<select
+						value={currentLang}
+						onChange={(e) => handleLanguageChange(e.target.value)}
+						style={styles.select}
+					>
+						<option value='de'>Deutsch</option>
+						<option value='en'>English</option>
+					</select>
+					<small style={styles.help}>{t.languageHelp}</small>
+				</div>
+			</div>
 
-      {status && (
-        <div style={{...styles.statusMessage, ...(status === 'error' ? styles.error : styles.success)}}>
-          {status === 'success' ? 'Konfiguration gespeichert' : 'Fehler beim Speichern'}
-        </div>
-      )}
+			<div style={styles.section}>
+				<h3 style={styles.sectionTitle}>{t.areasLegend}</h3>
+				<div style={styles.areasGrid}>
+					{areaOrder
+						.sort((a, b) => {
+							if (a === "All areas") return -1;
+							if (b === "All areas") return 1;
+							return areaLabels[a][currentLang].localeCompare(
+								areaLabels[b][currentLang]
+							);
+						})
+						.map((area) => (
+							<label key={area} style={styles.checkbox}>
+								<input
+									type='checkbox'
+									checked={config[area] || false}
+									onChange={() => handleAreaToggle(area)}
+									disabled={area !== "All areas" && areDisabled}
+								/>
+								{areaLabels[area][currentLang]}
+							</label>
+						))}
+				</div>
+			</div>
 
-      <div style={styles.buttonGroup}>
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          style={{...styles.button, ...styles.primaryButton}}
-        >
-          {t.save}
-        </button>
-        <button
-          onClick={() => {
-            if (checkUnsavedChanges()) {
-              setDialogData({
-                title: t.unsavedTitle,
-                message: t.unsavedWarning,
-                callback: () => setConfig(initialConfig)
-              });
-              setShowDialog(true);
-            } else {
-              setConfig(initialConfig);
-            }
-          }}
-          style={{...styles.button, ...styles.secondaryButton}}
-        >
-          {t.cancel}
-        </button>
-      </div>
+			<div style={styles.section}>
+				<h3 style={styles.sectionTitle}>{t.paramsLegend}</h3>
 
-      {showDialog && (
-        <div style={styles.dialog}>
-          <div style={styles.dialogContent}>
-            <h4 style={styles.dialogTitle}>{dialogData.title}</h4>
-            <p>{dialogData.message}</p>
-            <div style={styles.dialogButtons}>
-              <button
-                onClick={() => setShowDialog(false)}
-                style={{...styles.button, ...styles.secondaryButton}}
-              >
-                {t.no}
-              </button>
-              <button
-                onClick={() => {
-                  if (dialogData.callback) dialogData.callback();
-                  setShowDialog(false);
-                }}
-                style={{...styles.button, ...styles.primaryButton}}
-              >
-                {t.yes}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.pollInterval}</label>
+					<input
+						type='number'
+						min='1'
+						value={config.pollIntervalHours || 24}
+						onChange={(e) =>
+							handleConfigChange("pollIntervalHours", Number(e.target.value))
+						}
+						style={styles.input}
+					/>
+					<small style={styles.help}>{t.pollHelp}</small>
+				</div>
+
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.daysSpan}</label>
+					<input
+						type='number'
+						min='1'
+						max='90'
+						value={config.daysSpan || 14}
+						onChange={(e) =>
+							handleConfigChange("daysSpan", Number(e.target.value))
+						}
+						style={styles.input}
+					/>
+					<small style={styles.help}>{t.daysHelp}</small>
+				</div>
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.deeplApiKeyLabel}</label>
+					<input
+						type='text'
+						value={config.deeplApiKey || ""}
+						onChange={(e) => handleConfigChange("deeplApiKey", e.target.value)}
+						style={styles.inputPath}
+					/>
+					<small style={styles.help}>{t.deeplApiKeyHelp}</small>
+				</div>
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.routesPath}</label>
+					<div style={styles.inputWithButton}>
+						<input
+							type='text'
+							value={config.openCpnGeoJsonPathRoutes || ""}
+							onChange={(e) =>
+								handleConfigChange("openCpnGeoJsonPathRoutes", e.target.value)
+							}
+							style={styles.inputPath}
+						/>
+						<button
+							type='button'
+							onClick={() => handleFileSelect("routesPath")}
+							style={styles.fileButton}
+						>
+							📄
+						</button>
+					</div>
+					<small style={styles.help}>{t.routesHelp}</small>
+				</div>
+
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.waypointsPath}</label>
+					<div style={styles.inputWithButton}>
+						<input
+							type='text'
+							value={config.openCpnGeoJsonPathWaypoints || ""}
+							onChange={(e) =>
+								handleConfigChange(
+									"openCpnGeoJsonPathWaypoints",
+									e.target.value
+								)
+							}
+							style={styles.inputPath}
+						/>
+						<button
+							type='button'
+							onClick={() => handleFileSelect("waypointsPath")}
+							style={styles.fileButton}
+						>
+							📄
+						</button>
+					</div>
+					<small style={styles.help}>{t.waypointsHelp}</small>
+				</div>
+
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.moveMeters}</label>
+					<input
+						type='number'
+						min='0'
+						value={config.movePointMeters || 0}
+						onChange={(e) =>
+							handleConfigChange("movePointMeters", Number(e.target.value))
+						}
+						style={styles.input}
+					/>
+					<small style={styles.help}>{t.moveHelp}</small>
+				</div>
+
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.pointSize}</label>
+					<input
+						type='number'
+						min='1'
+						value={config.pointSize || 5}
+						onChange={(e) =>
+							handleConfigChange("pointSize", Number(e.target.value))
+						}
+						style={styles.input}
+					/>
+					<small style={styles.help}>{t.sizeHelp}</small>
+				</div>
+
+				<div style={styles.formGroup}>
+					<label style={styles.label}>{t.color}</label>
+					<input
+						type='color'
+						value={config.colorHex || "#FF0000"}
+						onChange={(e) => handleConfigChange("colorHex", e.target.value)}
+						style={styles.colorInput}
+					/>
+					<small style={styles.help}>{t.colorHelp}</small>
+				</div>
+			</div>
+
+			{status && (
+				<div
+					style={{
+						...styles.statusMessage,
+						...(status === "error" ? styles.error : styles.success),
+					}}
+				>
+					{status === "success"
+						? "Konfiguration gespeichert"
+						: "Fehler beim Speichern"}
+				</div>
+			)}
+
+			<div style={styles.buttonGroup}>
+				<button
+					onClick={handleSave}
+					disabled={loading}
+					style={{ ...styles.button, ...styles.primaryButton }}
+				>
+					{t.save}
+				</button>
+				<button
+					onClick={() => {
+						if (checkUnsavedChanges()) {
+							setDialogData({
+								title: t.unsavedTitle,
+								message: t.unsavedWarning,
+								callback: () => setConfig(initialConfig),
+							});
+							setShowDialog(true);
+						} else {
+							setConfig(initialConfig);
+						}
+					}}
+					style={{ ...styles.button, ...styles.secondaryButton }}
+				>
+					{t.cancel}
+				</button>
+			</div>
+
+			{showDialog && (
+				<div style={styles.dialog}>
+					<div style={styles.dialogContent}>
+						<h4 style={styles.dialogTitle}>{dialogData.title}</h4>
+						<p>{dialogData.message}</p>
+						<div style={styles.dialogButtons}>
+							<button
+								onClick={() => setShowDialog(false)}
+								style={{ ...styles.button, ...styles.secondaryButton }}
+							>
+								{t.no}
+							</button>
+							<button
+								onClick={() => {
+									if (dialogData.callback) dialogData.callback();
+									setShowDialog(false);
+								}}
+								style={{ ...styles.button, ...styles.primaryButton }}
+							>
+								{t.yes}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
 };
 
 const styles = {
-  container: {
-    padding: '20px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'flex-end', 
-    alignItems: 'center',
-    marginBottom: '10px',
-    paddingBottom: '5px',
-    width: '100%',            
-  },
-  section: {
-    marginBottom: '30px',
-  },
-  sectionTitle: {
-    fontSize: '1.2em',
-    fontWeight: '600',
-    marginBottom: '15px',
-    color: '#333',
-    borderBottom: '2px solid #667eea',
-    paddingBottom: '10px',
-  },
-  formGroup: {
-    marginBottom: '15px',
-  },
-  label: {
-    display: 'block',
-    fontWeight: '500',
-    marginBottom: '5px',
-    color: '#333',
-  },
-  input: {
-    padding: '8px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '1em',
-    width: '80px',
-  },
-  inputPath: {
-    padding: '8px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '1em',
-    width: '400px',
-  },
-  colorInput: {
-    width: '60px',
-    height: '40px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  select: {
-    padding: '8px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '1em',
-  },
-  checkbox: {
-    display: 'flex',
-    alignItems: 'center',
-    marginBottom: '8px',
-    cursor: 'pointer',
-    gap: '6px',
-  },
-  areasGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '10px',
-  },
-  help: {
-    display: 'block',
-    fontSize: '0.85em',
-    color: '#666',
-    marginTop: '5px',
-    fontStyle: 'italic',
-  },
-  inputWithButton: {
-    display: 'flex',
-    gap: '5px',
-  },
-  fileButton: {
-    padding: '8px 12px',
-    backgroundColor: '#667eea',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '10px',
-    marginTop: '30px',
-    paddingTop: '20px',
-    borderTop: '1px solid #ddd',
-  },
-  button: {
-    padding: '10px 20px',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: '500',
-    fontSize: '1em',
-  },
-  primaryButton: {
-    backgroundColor: '#667eea',
-    color: 'white',
-  },
-  secondaryButton: {
-    backgroundColor: '#6c757d',
-    color: 'white',
-  },
-  statusMessage: {
-    padding: '12px',
-    borderRadius: '4px',
-    marginBottom: '15px',
-    fontSize: '0.95em',
-  },
-  success: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-  },
-  error: {
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-  },
-  dialog: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-  },
-  dialogContent: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '8px',
-    maxWidth: '400px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-  },
-  dialogTitle: {
-    marginTop: 0,
-    marginBottom: '15px',
-    fontSize: '1.1em',
-  },
-  dialogButtons: {
-    display: 'flex',
-    gap: '10px',
-    justifyContent: 'flex-end',
-    marginTop: '20px',
-  },
-  helpButton: {
-    padding: '8px 16px',
-    backgroundColor: '#667eea',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: '500',
-    fontSize: '0.95em',
-    transition: 'background 0.3s',
-  }
+	container: {
+		padding: "20px",
+		fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
+	},
+	header: {
+		display: "flex",
+		justifyContent: "flex-end",
+		alignItems: "center",
+		marginBottom: "10px",
+		paddingBottom: "5px",
+		width: "100%",
+	},
+	section: {
+		marginBottom: "30px",
+	},
+	sectionTitle: {
+		fontSize: "1.2em",
+		fontWeight: "600",
+		marginBottom: "15px",
+		color: "#333",
+		borderBottom: "2px solid #667eea",
+		paddingBottom: "10px",
+	},
+	formGroup: {
+		marginBottom: "15px",
+	},
+	label: {
+		display: "block",
+		fontWeight: "500",
+		marginBottom: "5px",
+		color: "#333",
+	},
+	input: {
+		padding: "8px",
+		border: "1px solid #ddd",
+		borderRadius: "4px",
+		fontSize: "1em",
+		width: "80px",
+	},
+	inputPath: {
+		padding: "8px",
+		border: "1px solid #ddd",
+		borderRadius: "4px",
+		fontSize: "1em",
+		width: "400px",
+	},
+	colorInput: {
+		width: "60px",
+		height: "40px",
+		border: "1px solid #ddd",
+		borderRadius: "4px",
+		cursor: "pointer",
+	},
+	select: {
+		padding: "8px",
+		border: "1px solid #ddd",
+		borderRadius: "4px",
+		fontSize: "1em",
+	},
+	checkbox: {
+		display: "flex",
+		alignItems: "center",
+		marginBottom: "8px",
+		cursor: "pointer",
+		gap: "6px",
+	},
+	areasGrid: {
+		display: "grid",
+		gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+		gap: "10px",
+	},
+	help: {
+		display: "block",
+		fontSize: "0.85em",
+		color: "#666",
+		marginTop: "5px",
+		fontStyle: "italic",
+	},
+	inputWithButton: {
+		display: "flex",
+		gap: "5px",
+	},
+	fileButton: {
+		padding: "8px 12px",
+		backgroundColor: "#667eea",
+		color: "white",
+		border: "none",
+		borderRadius: "4px",
+		cursor: "pointer",
+	},
+	buttonGroup: {
+		display: "flex",
+		gap: "10px",
+		marginTop: "30px",
+		paddingTop: "20px",
+		borderTop: "1px solid #ddd",
+	},
+	button: {
+		padding: "10px 20px",
+		border: "none",
+		borderRadius: "4px",
+		cursor: "pointer",
+		fontWeight: "500",
+		fontSize: "1em",
+	},
+	primaryButton: {
+		backgroundColor: "#667eea",
+		color: "white",
+	},
+	secondaryButton: {
+		backgroundColor: "#6c757d",
+		color: "white",
+	},
+	statusMessage: {
+		padding: "12px",
+		borderRadius: "4px",
+		marginBottom: "15px",
+		fontSize: "0.95em",
+	},
+	success: {
+		backgroundColor: "#d4edda",
+		color: "#155724",
+	},
+	error: {
+		backgroundColor: "#f8d7da",
+		color: "#721c24",
+	},
+	dialog: {
+		position: "fixed",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: "rgba(0,0,0,0.5)",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		zIndex: 1000,
+	},
+	dialogContent: {
+		backgroundColor: "white",
+		padding: "30px",
+		borderRadius: "8px",
+		maxWidth: "400px",
+		boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+	},
+	dialogTitle: {
+		marginTop: 0,
+		marginBottom: "15px",
+		fontSize: "1.1em",
+	},
+	dialogButtons: {
+		display: "flex",
+		gap: "10px",
+		justifyContent: "flex-end",
+		marginTop: "20px",
+	},
+	helpButton: {
+		padding: "8px 16px",
+		backgroundColor: "#667eea",
+		color: "white",
+		border: "none",
+		borderRadius: "6px",
+		cursor: "pointer",
+		fontWeight: "500",
+		fontSize: "0.95em",
+		transition: "background 0.3s",
+	},
 };
 
 export default PluginConfigurationPanel;

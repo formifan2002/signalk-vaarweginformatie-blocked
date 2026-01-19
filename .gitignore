@@ -6,10 +6,23 @@ public/*
 !public/
 !public/index.html
 !public/icon.png
-!public/translations.js
+!public/translations.mjs
 !public/style.css
-!public/date-range-component.js
-!public/api-bridge.js
+!public/date-range-component.mjs
+!public/api-bridge.mjs
+!public/iconsShipType.mjs
+!public/common-utils.mjs
+!public/utils.mjs
+!public/map-view.mjs
+!public/config-view.mjs
+!public/signalk-delta-handler.mjs
+!public/ais-decoder.mjs
+!public/formatting-utils.mjs
+!public/translation-service.mjs
+
+#Translation cache
+translation-cache.json
+manual-translations.json
 
 dist/
 build/

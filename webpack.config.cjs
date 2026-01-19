@@ -7,7 +7,7 @@ const packageJson = require('./package.json');
 console.log(packageJson.name.replace(/[-@/]/g, '_'));
 
 module.exports = {
-  entry: './src/index',
+  entry: './src/index.mjs',
   mode: 'development',
   output: {
     path: path.resolve(__dirname, 'public')

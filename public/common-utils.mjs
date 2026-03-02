@@ -61,9 +61,7 @@ async function descriptionToHtml(description, berichte, currentLang = "de") {
 
 			if (found?.detailUrl) {
 				const url = transformDetailUrl(found.detailUrl);
-				headerHtml = `<strong> ${T.report}: </strong><a href=${escapeHtml(
-					url
-				)} target="_blank">${found.bericht}</a>`;
+				headerHtml = `<strong>${T.report}: </strong><a href="${escapeHtml(encodeURI(url))}" target="_blank">${found.bericht}</a>`;
 				headerHtml += `<strong> ${T.reason}: </strong> ${found.reasonCode}`;
 			}
 

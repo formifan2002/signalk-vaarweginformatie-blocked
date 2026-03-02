@@ -215,3 +215,5 @@ formifan2002
  - Bug corrections: 
     - more than 1 entries for the same object were not reported correctly
     - minor bugs corrected
+  ### Version 1.0.7
+  - Minor bug correction for generation of links in descriptions

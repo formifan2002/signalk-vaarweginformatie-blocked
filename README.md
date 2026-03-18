@@ -217,3 +217,5 @@ formifan2002
     - minor bugs corrected
   ### Version 1.0.7
   - Minor bug correction for generation of links in descriptions
+  ### Version 1.0.8
+  - Änderung Tile-Server (CARTO statt OpenStreetMap)

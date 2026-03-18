@@ -473,30 +473,21 @@ document.getElementById("configForm").addEventListener("submit", (e) => {
 	};
 
 	setLoading(true);
-	fetch(configUrl, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(payload),
-	})
-		.then((res) => res.json())
+	bridge.saveConfig(payload)
 		.then(() => {
 			showStatus(translations[currentLang].saveSuccess);
 			const initial = collectConfig();
 			setInitialConfig(initial);
 			updateMapButtonState();
-
 			if (!enabled) return Promise.resolve();
-			return fetch(restartUrl, { method: "POST" });
-		})
-		.then((res) => {
-			if (res && !res.ok) throw new Error(res.status);
-			return res ? res.json() : null;
+			return bridge.restartPlugin();
 		})
 		.then(() => {
 			showStatus(translations[currentLang].restartSuccess);
 			if (typeof loadMapData === "function") loadMapData();
 		})
 		.catch((err) => {
+			if (err.message === "auth") return; // Auth-Panel wurde bereits gezeigt
 			showStatus(translations[currentLang].saveError + err.message, true);
 		})
 		.finally(() => setLoading(false));
@@ -504,12 +495,12 @@ document.getElementById("configForm").addEventListener("submit", (e) => {
 
 restartBtn.addEventListener("click", () => {
 	setLoading(true);
-	fetch(restartUrl, { method: "POST" })
-		.then((res) => res.json())
+	bridge.restartPlugin()
 		.then(() => showStatus(translations[currentLang].restartSuccess))
-		.catch((err) =>
-			showStatus(translations[currentLang].restartError + err.message, true)
-		)
+		.catch((err) => {
+			if (err.message === "auth") return;
+			showStatus(translations[currentLang].restartError + err.message, true);
+		})
 		.finally(() => setLoading(false));
 });
 
@@ -532,12 +523,129 @@ backBtn.addEventListener("click", async () => {
 });
 
 // ============================================================
+// SIGNALK AUTH UI
+// Auth-Panel wird dynamisch in den Status-Bereich eingebettet.
+// Nur aktiv bei HTTP (lokal). Bei HTTPS übernimmt NGINX.
+// ============================================================
+
+function showAuthPanel(state) {
+	const t = translations[currentLang] || translations["de"];
+	const statusEl = document.getElementById("status");
+
+	// Zustand: "required" | "pending" | "denied"
+	const msgs = {
+		required: {
+			icon: "🔒",
+			color: "#c0392b",
+			text: t.authRequired ||
+				"Keine SignalK-Verbindung. Bitte eine Zugriffsanfrage stellen.",
+			btn: t.authRequestBtn || "Zugriffsanfrage stellen",
+			cancelBtn: null,
+		},
+		pending: {
+			icon: "⏳",
+			color: "#e67e22",
+			text: t.authPending ||
+				"Anfrage gestellt. Bitte in SignalK unter 'Access Requests' genehmigen " +
+				"(Permission: Admin, Authentication Timeout: NEVER).",
+			btn: null,
+			cancelBtn: t.authCancelBtn || "Anfrage abbrechen",
+		},
+		denied: {
+			icon: "❌",
+			color: "#c0392b",
+			text: t.authDenied ||
+				"Zugriffsanfrage wurde abgelehnt. Bitte erneut versuchen.",
+			btn: t.authRequestBtn || "Erneut versuchen",
+			cancelBtn: null,
+		},
+	};
+
+	const m = msgs[state] || msgs.required;
+
+	// Formular ausblenden während Auth aussteht
+	document.getElementById("configForm").style.display =
+		state === "pending" ? "none" : "none";
+
+	statusEl.style.display = "block";
+	statusEl.className = "error";
+	statusEl.innerHTML = `
+		<div style="display:flex; align-items:flex-start; gap:0.6em;">
+			<span style="font-size:1.4em; line-height:1;">${m.icon}</span>
+			<div style="flex:1;">
+				<div style="color:${m.color}; font-weight:600; margin-bottom:0.5em;">
+					${m.text}
+				</div>
+				<div style="display:flex; gap:0.5em; flex-wrap:wrap;">
+					${m.btn ? `<button id="authRequestBtn" style="
+						padding:0.5em 1em; background:#667eea; color:white;
+						border:none; border-radius:6px; cursor:pointer; font-size:0.95em;">
+						${m.btn}
+					</button>` : ""}
+					${m.cancelBtn ? `<button id="authCancelBtn" style="
+						padding:0.5em 1em; background:#95a5a6; color:white;
+						border:none; border-radius:6px; cursor:pointer; font-size:0.95em;">
+						${m.cancelBtn}
+					</button>` : ""}
+				</div>
+			</div>
+		</div>`;
+
+	// Button-Handler
+	const reqBtn = document.getElementById("authRequestBtn");
+	if (reqBtn) {
+		reqBtn.addEventListener("click", async () => {
+			reqBtn.disabled = true;
+			reqBtn.textContent = "...";
+			const ok = await bridge.requestAuthorization();
+			if (!ok) {
+				showAuthPanel("required");
+				showStatus(
+					t.authRequestError ||
+						"Fehler beim Stellen der Anfrage. Noch offene Anfragen in SignalK löschen.",
+					true
+				);
+			}
+		});
+	}
+
+	const cancelBtn2 = document.getElementById("authCancelBtn");
+	if (cancelBtn2) {
+		cancelBtn2.addEventListener("click", () => {
+			bridge.stopAuthPolling();
+			showAuthPanel("required");
+		});
+	}
+}
+
+function hideAuthPanel() {
+	const statusEl = document.getElementById("status");
+	statusEl.style.display = "none";
+	statusEl.innerHTML = "";
+	document.getElementById("configForm").style.display = "";
+}
+
+// Auth-Callbacks registrieren
+bridge.onAuthRequired(() => showAuthPanel("required"));
+bridge.onAuthPending(() => showAuthPanel("pending"));
+bridge.onAuthDenied(() => showAuthPanel("denied"));
+bridge.onAuthApproved(() => {
+	hideAuthPanel();
+	loadConfig();
+});
+
+// ============================================================
 // LOAD INITIAL CONFIGURATION
 // ============================================================
 
-fetch(configUrl)
-	.then((res) => res.json())
-	.then((data) => {
+async function loadConfig() {
+	try {
+		const data = await bridge.getConfig();
+
+		// getConfig gibt null zurück wenn Auth fehlschlägt –
+		// onAuthRequired-Callback wurde dann bereits ausgelöst
+		if (data === null) return;
+
 		const raw = data.configuration || {};
 		const initial = {
 			...raw,
@@ -553,15 +661,9 @@ fetch(configUrl)
 		updateUI(currentLang);
 		renderAreas(currentLang, normalized);
 
-		document.getElementById("enabledSwitch").checked = Boolean(
-			normalized.enabled
-		);
-		document.getElementById("loggingSwitch").checked = Boolean(
-			normalized.enableLogging
-		);
-		document.getElementById("debugSwitch").checked = Boolean(
-			normalized.enableDebug
-		);
+		document.getElementById("enabledSwitch").checked = Boolean(normalized.enabled);
+		document.getElementById("loggingSwitch").checked = Boolean(normalized.enableLogging);
+		document.getElementById("debugSwitch").checked = Boolean(normalized.enableDebug);
 		updateRestartButton();
 		updateResourceInfo(currentLang);
 
@@ -582,15 +684,26 @@ fetch(configUrl)
 
 		const init = collectConfig();
 		setInitialConfig(init);
-		// Nach dem Laden der Config startAutoMode aufrufen
+		hideAuthPanel();
+
 		if (typeof startAutoMode === "function") {
 			startAutoMode();
 		}
-	})
-	.catch((err) => {
+	} catch (err) {
 		showStatus(
 			(translations[currentLang]?.loadError || "Fehler beim Laden: ") +
 				err.message,
 			true
 		);
-	});
+	}
+}
+
+// Startup: erst Auth prüfen, dann Config laden
+(async () => {
+	const authStatus = await bridge.checkInitialAuthStatus();
+	if (authStatus === "ok") {
+		loadConfig();
+	} else {
+		showAuthPanel("required");
+	}
+})();

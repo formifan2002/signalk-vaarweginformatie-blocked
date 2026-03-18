@@ -218,4 +218,6 @@ formifan2002
   ### Version 1.0.7
   - Minor bug correction for generation of links in descriptions
   ### Version 1.0.8
-  - Änderung Tile-Server (CARTO statt OpenStreetMap)
+  - Changed tile server from OpenStreetMap to CARTO
+  ### Version 1.0.9
+  - Added authorization process (in case user is not logged in to SignalK)

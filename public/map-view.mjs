@@ -48,7 +48,13 @@ document.addEventListener("DOMContentLoaded", () => {
 		document.getElementById("configView").style.display = "block";
 	}
 
-	startAutoMode();
+	// startAutoMode wird NICHT direkt aufgerufen wenn Auth nötig ist (HTTP).
+	// config-view.mjs ruft startAutoMode() erst nach erfolgreichem loadConfig().
+	// Bei HTTPS (kein Auth) oder ?mode=map direkt starten.
+	const needsAuth = window.location.protocol === "http:";
+	if (!needsAuth || mode === "map") {
+		startAutoMode();
+	}
 });
 
 async function startAutoMode() {
@@ -79,18 +85,32 @@ async function startAutoMode() {
 	mapView.style.display = "block";
 	mapView.classList.add("active");
 
-	// 🔹 Warten bis initialConfig geladen ist
+	// 🔹 Warten bis initialConfig geladen ist (max. 5s, danach Auth-Fehler)
 	const waitForConfig = () =>
-		new Promise((resolve) => {
+		new Promise((resolve, reject) => {
 			const timer = setInterval(() => {
 				if (initialConfig !== null) {
 					clearInterval(timer);
 					resolve();
 				}
 			}, 50);
+			setTimeout(() => {
+				clearInterval(timer);
+				if (initialConfig === null) reject(new Error("auth"));
+			}, 5000);
 		});
 
-	await waitForConfig();
+	try {
+		await waitForConfig();
+	} catch (e) {
+		// initialConfig wurde nicht geladen → Auth steht noch aus.
+		// Spinner ausblenden und Config-View anzeigen damit Auth-Panel sichtbar wird.
+		overlay.style.display = "none";
+		document.getElementById("viewToggle").style.display = "flex";
+		document.getElementById("configView").style.display = "block";
+		document.getElementById("mapView").style.display = "none";
+		return;
+	}
 	// Sprache setzen
 	setCurrentLang(initialConfig.language ? "de" : "en" || "en");
 	// Loading-Text aktualisieren
@@ -701,7 +721,14 @@ async function initMap() {
 			attributionControl: false,
 		}).setView([52.5, 5.0], 8);
 
-		// Hauptlayer
+		// Fallback: nach 4s auf jeden Fall weitermachen (Android-Chrome
+		// feuert den load-Event manchmal nicht bei Tiles aus dem Cache)
+		const fallbackTimer = setTimeout(() => {
+			console.warn("mapReady: tile load event did not fire, continuing anyway");
+			resolve();
+		}, 4000);
+
+		// Hauptlayer: CARTO statt tile.openstreetmap.org (kein Referer nötig)
 		const baseLayer = L.tileLayer(
 			"https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
 			{
@@ -713,7 +740,10 @@ async function initMap() {
 		);
 
 		// Wenn der Tile-Layer geladen ist → Map ist sichtbar
-		baseLayer.on("load", () => resolve());
+		baseLayer.on("load", () => {
+			clearTimeout(fallbackTimer);
+			resolve();
+		});
 
 		baseLayer.addTo(mapInstance);
 

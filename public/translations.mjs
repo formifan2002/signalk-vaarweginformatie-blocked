@@ -106,6 +106,17 @@ const translations = {
 		eta: "Geschätzte Ankunftszeit",
 		starboard: "Steuerbord",
 		port: "Backbord",
+		authRequired:
+			"Keine SignalK-Verbindung. Bitte eine Zugriffsanfrage stellen, damit das Plugin auf SignalK zugreifen kann.",
+		authRequestBtn: "Zugriffsanfrage stellen",
+		authPending:
+			"Anfrage gestellt. Bitte in SignalK unter 'Security → Access Requests' genehmigen " +
+			"(Permission: Admin, Authentication Timeout: NEVER).",
+		authCancelBtn: "Anfrage abbrechen",
+		authDenied:
+			"Zugriffsanfrage wurde abgelehnt oder ist abgelaufen. Bitte erneut versuchen.",
+		authRequestError:
+			"Fehler beim Stellen der Anfrage. Eventuell noch offene Anfragen in SignalK löschen.",
 	},
 	en: {
 		title: "Configuration 'signalk-vaarweginformatie-blocked'",
@@ -215,6 +226,17 @@ const translations = {
 		eta: "Estimated Time of Arrival",
 		starboard: "starboard",
 		port: "port",
+		authRequired:
+			"No SignalK connection. Please submit an access request so the plugin can connect to SignalK.",
+		authRequestBtn: "Request access",
+		authPending:
+			"Request submitted. Please approve it in SignalK under 'Security → Access Requests' " +
+			"(Permission: Admin, Authentication Timeout: NEVER).",
+		authCancelBtn: "Cancel request",
+		authDenied:
+			"Access request was denied or expired. Please try again.",
+		authRequestError:
+			"Error submitting request. Delete any pending requests in SignalK and try again.",
 	},
 };
 

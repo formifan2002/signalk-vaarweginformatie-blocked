@@ -223,3 +223,5 @@ formifan2002
   - Added authorization process (in case user is not logged in to SignalK)
   ### Version 1.0.10
   - Adjustments for latest versions of SignalK
+  ### Version 1.0.11
+  - Adjustments for latest versions of SignalK

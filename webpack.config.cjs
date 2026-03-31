@@ -1,7 +1,8 @@
 const path = require('path');
-const { ModuleFederationPlugin } = require('webpack').container;
-const { WatchIgnorePlugin } = require('webpack');
+const { container, WatchIgnorePlugin } = require('webpack');
 const packageJson = require('./package.json');
+
+const { ModuleFederationPlugin } = container;
 
 module.exports = {
   entry: './src/index.mjs',
@@ -41,11 +42,6 @@ module.exports = {
     ]
   },
 
-  externals: {
-    react: 'React',
-    'react-dom': 'ReactDOM'
-  },
-
   plugins: [
     new ModuleFederationPlugin({
       name: packageJson.name.replace(/[-@/]/g, '_'),
@@ -54,8 +50,16 @@ module.exports = {
         './PluginConfigurationPanel': './src/components/PluginConfigurationPanel.jsx'
       },
       shared: {
-        react: { singleton: true, requiredVersion: false },
-        'react-dom': { singleton: true, requiredVersion: false }
+        react: {
+          singleton: true,
+          requiredVersion: false,
+          import: false
+        },
+        'react-dom': {
+          singleton: true,
+          requiredVersion: false,
+          import: false
+        }
       }
     }),
 

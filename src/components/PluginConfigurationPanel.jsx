@@ -2,7 +2,8 @@ import React, { useState } from "react";
 
 const PluginConfigurationPanel = ({ configuration, save }) => {
 	const [config, setConfig] = useState(configuration || {});
-	const [currentLang, setCurrentLang] = useState(config.language ? "de" : "en");
+	const initialLang = configuration?.language || "en";
+	const [currentLang, setCurrentLang] = useState(initialLang);
 	const [initialConfig, setInitialConfig] = useState(configuration);
 	const [loading, setLoading] = useState(false);
 	const [status, setStatus] = useState("");

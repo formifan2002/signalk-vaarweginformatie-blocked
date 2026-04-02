@@ -1,36 +1,33 @@
 const path = require('path');
-const { container, WatchIgnorePlugin } = require('webpack');
+const { ModuleFederationPlugin } = require('webpack').container;
+const { WatchIgnorePlugin } = require('webpack');
+require('@signalk/server-admin-ui-dependencies');
 const packageJson = require('./package.json');
 
-const { ModuleFederationPlugin } = container;
+console.log(packageJson.name.replace(/[-@/]/g, '_'));
 
 module.exports = {
   entry: './src/index.mjs',
-  mode: 'production',
-
+  mode: 'development',
   output: {
-    path: path.resolve(__dirname, 'public'),
-    filename: 'bundle.js'
+    path: path.resolve(__dirname, 'public')
   },
-
   module: {
     rules: [
       {
         test: /\.jsx?$/,
+        loader: 'babel-loader',
         exclude: /node_modules/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: [
-              '@babel/preset-env',
-              '@babel/preset-react'
-            ]
-          }
+        options: {
+          presets: ['@babel/preset-react']
         }
       },
       {
         test: /\.css$/,
-        use: ['style-loader', 'css-loader']
+        use: [
+          'style-loader',
+          'css-loader'
+        ]
       },
       {
         test: /\.(png|svg|jpg|gif)$/,
@@ -41,28 +38,19 @@ module.exports = {
       }
     ]
   },
-
   plugins: [
     new ModuleFederationPlugin({
       name: packageJson.name.replace(/[-@/]/g, '_'),
+      library: { type: 'var', name: packageJson.name.replace(/[-@/]/g, '_') },
       filename: 'remoteEntry.js',
       exposes: {
         './PluginConfigurationPanel': './src/components/PluginConfigurationPanel.jsx'
       },
       shared: {
-        react: {
-          singleton: true,
-          requiredVersion: false,
-          import: false
-        },
-        'react-dom': {
-          singleton: true,
-          requiredVersion: false,
-          import: false
-        }
-      }
+        react: { singleton: true, requiredVersion: false },
+        "react-dom": { singleton: true, requiredVersion: false }
+      },
     }),
-
     new WatchIgnorePlugin({
       paths: [path.resolve(__dirname, 'public/')]
     })

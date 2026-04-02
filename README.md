@@ -221,7 +221,5 @@ formifan2002
   - Changed tile server from OpenStreetMap to CARTO
   ### Version 1.0.9
   - Added authorization process (in case user is not logged in to SignalK)
-  ### Version 1.0.10
-  - Adjustments for latest versions of SignalK
-  ### Version 1.0.11
+  ### Version 1.0.10-1.0.12
   - Adjustments for latest versions of SignalK

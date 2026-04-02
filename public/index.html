@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title id="pageTitle"></title>
+
+		<!-- Leaflet CSS -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+		/>
+		<!-- MarkerCluster CSS -->
+		<link
+			rel="stylesheet"
+			href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
+		/>
+		<!-- Custom CSS -->
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<div id="loadingOverlay">
+			<div class="spinner"></div>
+			<div class="loading-text"></div>
+		</div>
+
+		<!-- View Toggle Buttons -->
+		<div class="view-toggle" id="viewToggle">
+			<button class="active" data-view="config" id="configViewBtn"></button>
+			<button data-view="map" id="mapViewBtn"></button>
+		</div>
+
+		<!-- Configuration View -->
+		<div class="config-view active" id="configView">
+			<div class="container">
+				<h1 id="mainTitle"></h1>
+				<div class="description">
+					<img
+						src="icon.png"
+						alt="Plugin Icon"
+						onerror="this.style.display='none'"
+					/>
+					<div class="description-text" id="pluginDescription"></div>
+				</div>
+
+				<div class="control-panel">
+					<div class="switches">
+						<div class="switch-container">
+							<label class="switch">
+								<input type="checkbox" id="enabledSwitch" name="enabled" />
+								<span class="slider"></span>
+							</label>
+							<span id="enabledLabel"></span>
+						</div>
+
+						<div class="switch-container">
+							<label class="switch">
+								<input
+									type="checkbox"
+									id="loggingSwitch"
+									name="enableLogging"
+								/>
+								<span class="slider"></span>
+							</label>
+							<span id="loggingLabel"></span>
+						</div>
+
+						<div class="switch-container">
+							<label class="switch">
+								<input type="checkbox" id="debugSwitch" name="enableDebug" />
+								<span class="slider"></span>
+							</label>
+							<span id="debugLabel"></span>
+						</div>
+					</div>
+
+					<button type="button" class="help-button" id="helpBtn">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<circle cx="12" cy="12" r="10"></circle>
+							<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+							<line x1="12" y1="17" x2="12.01" y2="17"></line>
+						</svg>
+						<span id="helpBtnText"></span>
+					</button>
+				</div>
+
+				<div id="status"></div>
+
+				<div class="custom-dialog" id="confirmDialog">
+					<div class="dialog-content">
+						<div class="dialog-title" id="dialogTitle"></div>
+						<div class="dialog-message" id="dialogMessage"></div>
+						<div class="dialog-buttons">
+							<button
+								class="dialog-button secondary"
+								id="dialogCancel"
+							></button>
+							<button class="dialog-button primary" id="dialogConfirm"></button>
+						</div>
+					</div>
+				</div>
+
+				<form id="configForm">
+					<fieldset>
+						<legend id="generalLegend"></legend>
+						<div class="field-group">
+							<span class="field-label" id="languageLabel"></span>
+							<select name="language" id="languageSelect">
+								<option value="de">Deutsch</option>
+								<option value="en">English</option>
+							</select>
+							<span class="field-help" id="languageHelp"></span>
+						</div>
+
+						<div class="resource-info">
+							<h4 id="resourceTitle"></h4>
+							<p id="resourceObjects"></p>
+							<p id="resourceWaterways"></p>
+						</div>
+					</fieldset>
+
+					<fieldset id="areas">
+						<legend id="areasLegend"></legend>
+					</fieldset>
+
+					<fieldset>
+						<legend id="paramsLegend"></legend>
+
+						<div class="field-group">
+							<span class="field-label" id="pollLabel"></span>
+							<input type="number" name="pollIntervalHours" min="1" />
+							<span class="field-help" id="pollHelp"></span>
+						</div>
+
+						<div class="field-group">
+							<span class="field-label" id="daysLabel"></span>
+							<input type="number" name="daysSpan" min="1" />
+							<span class="field-help" id="daysHelp"></span>
+						</div>
+						<div class="field-group">
+							<span class="field-label" id="deeplApiKeyLabel"></span>
+							<input type="text" name="deeplApiKey" />
+							<span class="field-help" id="deeplApiKeyHelp"></span>
+						</div>
+						<div class="field-group">
+							<span class="field-label" id="routesLabel"></span>
+							<div class="input-with-button">
+								<input
+									type="text"
+									name="openCpnGeoJsonPathRoutes"
+									id="routesPath"
+								/>
+								<button type="button" class="file-button" id="routesFileBtn">
+									📁
+								</button>
+							</div>
+							<span class="field-help" id="routesHelp"></span>
+						</div>
+
+						<div class="field-group">
+							<span class="field-label" id="waypointsLabel"></span>
+							<div class="input-with-button">
+								<input
+									type="text"
+									name="openCpnGeoJsonPathWaypoints"
+									id="waypointsPath"
+								/>
+								<button type="button" class="file-button" id="waypointsFileBtn">
+									📁
+								</button>
+							</div>
+							<span class="field-help" id="waypointsHelp"></span>
+						</div>
+
+						<div class="field-group">
+							<span class="field-label" id="moveLabel"></span>
+							<input type="number" name="movePointMeters" min="0" />
+							<span class="field-help" id="moveHelp"></span>
+						</div>
+
+						<div class="field-group">
+							<span class="field-label" id="sizeLabel"></span>
+							<input type="number" name="pointSize" min="1" />
+							<span class="field-help" id="sizeHelp"></span>
+						</div>
+
+						<div class="field-group">
+							<span class="field-label" id="colorLabel"></span>
+							<input type="color" name="colorHex" />
+							<span class="field-help" id="colorHelp"></span>
+						</div>
+					</fieldset>
+
+					<div class="button-group">
+						<button type="submit" id="saveBtn"></button>
+						<button type="button" id="restartBtn"></button>
+						<button type="button" id="cancelBtn"></button>
+						<button type="button" id="backBtn"></button>
+					</div>
+				</form>
+			</div>
+		</div>
+
+		<!-- Map View -->
+		<div class="map-view" id="mapView">
+			<div id="map"></div>
+			<!-- Map Info INNERHALB von map-view verschieben -->
+			<div class="map-info" id="mapInfo">
+				<div class="map-info-header" id="mapInfoHeader">
+					<span id="mapInfoTitle">Karteninfo</span>
+					<span class="map-info-toggle-icon">▲</span>
+				</div>
+				<div>
+					<input type="checkbox" id="toggleWaterways" checked />
+					<strong id="mapWaterwaysLabel">Wasserwege:</strong>
+					<span id="mapWaterwaysCount">0</span>
+				</div>
+				<div>
+					<input type="checkbox" id="toggleClosures" checked />
+					<strong id="mapClosuresLabel">Sperrungen:</strong>
+					<span id="mapClosuresCount">0</span>
+				</div>
+				<div>
+					<input type="checkbox" id="toggleAIS" checked />
+					<strong id="mapAISLabel">AIS - Andere Schiffe:</strong>
+					<span id="mapAISCount">0</span>
+					<button
+						id="showSogBtn"
+						style="
+							display: none;
+							padding: 0.2em 0.4em;
+							cursor: pointer;
+							border: 1px solid #667eea;
+							background: white;
+							color: #667eea;
+							border-radius: 4px;
+							font-size: 0.8em;
+						"
+						title="SOG anzeigen"
+					>
+						+⚓
+					</button>
+				</div>
+				<div style="margin-top: 0.5em">
+					<date-range-component></date-range-component>
+				</div>
+				<div
+					style="
+						margin-top: 0.5em;
+						display: flex;
+						justify-content: space-between;
+						align-items: center;
+					"
+				>
+					<strong id="searchLabel">Suche:</strong>
+					<button
+						id="centerVesselBtn"
+						style="
+							display: none;
+							padding: 0.4em 0.8em;
+							cursor: pointer;
+							border: 1px solid #667eea;
+							background: white;
+							color: #667eea;
+							border-radius: 4px;
+							font-size: 1em;
+						"
+						title=""
+					>
+						🎯
+					</button>
+				</div>
+				<div style="margin-top: 0.3em">
+					<input
+						type="text"
+						id="searchInput"
+						placeholder="Name der Sperrung, MMSI..."
+						style="width: 100%; padding: 0.3em"
+					/>
+					<div
+						id="searchResults"
+						style="
+							max-height: 150px;
+							overflow-y: auto;
+							margin-top: 0.3em;
+							display: none;
+						"
+					></div>
+				</div>
+			</div>
+		</div>
+
+		<!-- External Scripts -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/de.js"></script>
+		<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+		<!-- Component Scripts -->
+		<script type="module" src="date-range-component.mjs?v=2"></script>
+
+		<script type="module" src="translations.mjs"></script>
+		<script type="module" src="api-bridge.mjs"></script>
+		<script type="module" src="utils.mjs"></script>
+		<script type="module" src="config-view.mjs"></script>
+		<script type="module" src="map-view.mjs"></script>
+	</body>
+</html>

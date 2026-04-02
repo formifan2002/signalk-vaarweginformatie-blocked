@@ -10,7 +10,7 @@ public/*
 !public/style.css
 !public/date-range-component.mjs
 !public/api-bridge.mjs
-!public/iconsShipType.mjs
+!public/iconsshiptype.mjs
 !public/common-utils.mjs
 !public/utils.mjs
 !public/map-view.mjs
